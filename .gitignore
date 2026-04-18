@@ -1,0 +1,4 @@
+haiku/
+buildtools/
+*.image
+*.log
