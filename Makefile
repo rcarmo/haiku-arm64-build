@@ -108,3 +108,8 @@ clean:
 
 distclean:
 	rm -rf $(HAIKU_DIR) $(BUILDTOOLS_DIR) $(BUILD_DIR)
+
+bootstrap: toolchain
+	cd $(BUILD_DIR) && jam -j$(NPROC) -q @bootstrap-mmc
+	@echo "✅ Bootstrap image built"
+	@ls -lh $(BUILD_DIR)/haiku-mmc.image
