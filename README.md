@@ -1,5 +1,7 @@
 # Haiku ARM64 Build Environment
 
+![Haiku ARM64 Build icon](docs/icon-256.png)
+
 Reproducible build setup for Haiku OS ARM64 on Orange Pi 6 Plus.
 
 ## Status: Nearly Bootable
