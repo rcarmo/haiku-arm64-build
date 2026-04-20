@@ -1,37 +1,47 @@
 # Haiku ARM64 Build Environment
 
-Local build environment for Haiku OS ARM64 on Orange Pi 6 Plus.
+Reproducible build setup for Haiku OS ARM64 on Orange Pi 6 Plus.
+
+## Status: Nearly Bootable
+
+The kernel loads, BFS mounts, drivers work. Blocked by packagefs not extracting zstd-compressed packages on arm64. See `notes/haiku-arm64-build.md` for full details.
 
 ## Quick Start
 
 ```sh
-make deps      # install prerequisites (once)
-make clone     # clone haiku + buildtools repos
-make toolchain # build cross-compiler (~15 min)
-make image     # build MMC image (~5 min)
-make test      # QEMU smoke test (30s)
+make deps        # install prerequisites (once)
+make clone       # clone haiku + buildtools repos
+make toolchain   # build cross-compiler (~15 min)
+make image       # build minimum MMC image (~5 min)
+make test        # QEMU smoke test (30s)
 ```
 
-## Status
+## QEMU Boot (working)
 
-- Build: ✅ working (native aarch64 cross-compile)
-- QEMU boot: kernel loads, panics on disk init (upstream ARM64 limitation)
-- Bare metal: untested (target: Orange Pi 6 Plus / CIX P1)
+```sh
+qemu-system-aarch64 \
+  -bios /usr/share/qemu-efi-aarch64/QEMU_EFI.fd \
+  -M virt -cpu max -m 2048 \
+  -device virtio-scsi-pci \
+  -device scsi-hd,drive=x0 \
+  -drive file=haiku-mmc.image,if=none,format=raw,id=x0 \
+  -device virtio-keyboard-device \
+  -device virtio-tablet-device \
+  -device ramfb -serial stdio
+```
+
+**Note:** Must use `virtio-scsi-pci`, not `virtio-blk-device`.
 
 ## Build Host
 
 - Orange Pi 6 Plus (CIX P1, 12 cores, 14 GiB RAM)
 - Debian Trixie (aarch64), kernel 6.6.89-cix
-- Bun runtime, GCC 14.2.0
+- GCC 14.2.0 (host) / 13.3.0 (cross-compiler)
 
-## Files
+## Repos
 
-- `Makefile` — reproducible build targets
-- `haiku/` — Haiku source (git submodule, not tracked)
-- `buildtools/` — Haiku build tools (git submodule, not tracked)
-
-## Notes
-
-- ext4 doesn't support xattr properly; build uses fallback (slightly slower)
-- ARM64 port is upstream "extremely early" status
-- Cross-toolchain is `aarch64-unknown-haiku-gcc 13.3.0`
+- `haiku/` — Haiku source (from review.haiku-os.org)
+- `buildtools/` — Cross-compiler + jam
+- `haikuporter/` — Package build tool
+- `haikuports/` — smrobtzz arm64-fixes branch
+- `haikuports.cross/` — smrobtzz update-everything branch

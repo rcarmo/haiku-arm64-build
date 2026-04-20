@@ -1,0 +1,2 @@
+#!/bin/bash
+exec /workspace/projects/haiku-build/haikuporter/haikuporter "$@" 2>&1 | tee -a /workspace/tmp/haikuporter-trace.log
