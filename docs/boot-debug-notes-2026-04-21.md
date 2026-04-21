@@ -226,6 +226,71 @@ Interpretation:
 - `src/system/runtime_loader/arch/arm64/arch_relocate.cpp` is modified locally, but `generated.arm64/.../runtime_loader` is still byte-identical to stock (`sha256 8c210d01...`).
 - Attempting `jam runtime_loader` currently fails due missing C++ header feature setup in this bootstrap configuration (`fatal error: algorithm: No such file or directory`), so source-side runtime_loader changes are not yet reflected in produced binaries.
 
+### Case M: generated stack + core system launch (media/net removed), autologin kept
+
+Result:
+
+- `launch_daemon` no longer fails with `Bad port ID`.
+- `Launching x-vnd.haiku-media_server failed` disappears once media service is removed from packaged launch config.
+- Still sees userland crash pair:
+  - `debug_server: Thread 50/52 entered the debugger: Segment violation`
+  - `consoled: error -2/-4 starting console`
+
+Interpretation:
+
+- Media/net launch failures were secondary noise; core crash remains elsewhere.
+
+---
+
+### Case N: same as M but no autologin job
+
+Result:
+
+- Boot reaches mounted system + package daemon activity.
+- No debug_server segment violations observed in this run window.
+
+Interpretation:
+
+- Entering user session is a major trigger for the current crash chain.
+
+---
+
+### Case O: same as M, autologin enabled, user launch file reduced to empty `run {}`
+
+Result:
+
+- No debug_server segment violations observed.
+
+Interpretation:
+
+- User session crash is tied to launched user services, not autologin mechanism alone.
+
+---
+
+### Case P: autologin + user launch with only `app_server`
+
+Result:
+
+- Immediate userland crash returns:
+  - `debug_server: Thread 51 entered the debugger: Segment violation`
+  - `consoled: error -4 starting console`
+
+Interpretation:
+
+- Minimal reproducer currently points at `app_server` path (or components it brings up, e.g. input/console chain).
+
+---
+
+### Case Q: Case P repeated with stock `app_server` binary (generated libs still in use)
+
+Result:
+
+- Same failure signature as Case P (`Thread 51` segfault + `consoled -4`).
+
+Interpretation:
+
+- Not specific to the generated `app_server` binary alone; likely shared runtime/library/adjacent service interaction in user session path.
+
 ## Working conclusions
 
 1. **Do not rely on broad repacks for diagnosis right now**
@@ -234,6 +299,8 @@ Interpretation:
    - Prevents dead-end panic loops and allows deeper boot diagnostics.
 3. **Primary blocker has moved to runtime loader + early service startup stability**
    - Missing dependencies and relocation faults combine into service crash cascades.
+4. **Current best reproducer is now in user session startup**
+   - With a coherent generated core stack and package decompression bypassed, crashes are reproducible when user launch includes `app_server` (or services it triggers), while no-autologin / empty user launch variants remain stable in the same time window.
 
 ## Known recurring missing components in logs
 
@@ -272,3 +339,11 @@ These should be validated against the active package set in mounted `/boot/syste
 - `/workspace/tmp/casePristine_repackDeps_rtldPkg.usb.log`
 - `/workspace/tmp/casePristine_pkgHaikuRtld_repackDeps.usb.log`
 - `/workspace/tmp/caseRepackDeps_genstack74.usb.log`
+- `/workspace/tmp/casePkgGenLaunchStack_repackDeps_icu74_gcc133.usb.log`
+- `/workspace/tmp/casePkgGenServersStack_repackDeps_icu74_gcc133.usb.log`
+- `/workspace/tmp/casePkgGenServersStack_disableMediaNet.usb.log`
+- `/workspace/tmp/casePkgGenServersCoreLaunch_repackDeps_icu74_gcc133.usb.log`
+- `/workspace/tmp/casePkgGenServersCoreNoLogin_repackDeps_icu74_gcc133.usb.log`
+- `/workspace/tmp/casePkgGenServersCoreLaunchUserMin_repackDeps_icu74_gcc133.usb.log`
+- `/workspace/tmp/casePkgGenServersCoreLaunchUserApp_repackDeps_icu74_gcc133.usb.log`
+- `/workspace/tmp/casePkgCoreLaunchUserApp_stockapp_repackDeps_icu74_gcc133.usb.log`
