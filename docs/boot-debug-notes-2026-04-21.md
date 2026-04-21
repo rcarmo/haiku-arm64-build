@@ -117,6 +117,82 @@ Interpretation:
 
 - Repacking is not currently a stable path for isolating early-userspace crashes.
 
+## Additional run set (post-upstream sync)
+
+### Case F: true pristine nightly image baseline (`hrev59637`)
+
+Result:
+
+- Boot reaches mount, then packagefs repeatedly fails loading compressed package chunks:
+  - `bash-4.4.023-1-arm64.hpkg`
+  - `coreutils-8.22-1-arm64.hpkg`
+  - `freetype-2.6.3-1-arm64.hpkg`
+  - `gcc_syslibs-13.2.0_2023_08_10-1-arm64.hpkg`
+  - `icu-67.1-2-arm64.hpkg`
+  - `ncurses6-6.2-1-arm64.hpkg`
+  - `zlib-1.2.13-1-arm64.hpkg`
+- Follow-on failure:
+  - `runtime_loader: Cannot open file libstdc++.so.6 (needed by /boot/system/servers/launch_daemon)`
+  - `error starting "/boot/system/servers/launch_daemon"`
+
+Interpretation:
+
+- On a truly pristine image, package chunk decompression failure is a first-order blocker (not an artifact of prior modifications).
+
+---
+
+### Case G: pristine + only the 7 failing dependency packages repacked uncompressed
+
+Result:
+
+- Decompression failures disappear for those packages.
+- New first failure becomes:
+  - `runtime_loader: /boot/system/lib/libroot.so: Troubles relocating: Bad data`
+  - `error starting "/boot/system/servers/launch_daemon" error = -2147483632`
+
+Interpretation:
+
+- Once package decompression is bypassed, the next hard blocker is arm64 relocation/runtime-loader handling for `libroot.so`.
+
+---
+
+### Case H: Case G + non-packaged generated `libroot.so`
+
+Result:
+
+- Relocation `Bad data` is bypassed.
+- Failure shifts to:
+  - `thread_hit_serious_debug_event(): Failed to install debugger: thread: 26 (launch_daemon): Bad port ID`
+
+Interpretation:
+
+- `libroot` replacement gets past relocation failure but still leaves early `launch_daemon` failure.
+
+---
+
+### Case I: Case H + launch config minimized (registrar-only / empty)
+
+Result:
+
+- Same `launch_daemon` `Bad port ID` failure reproduces even with near-empty launch config.
+
+Interpretation:
+
+- Failure is not caused by normal service/job graph complexity; likely in `launch_daemon` startup path itself (or earliest prerequisites).
+
+---
+
+### Case J: Case G + tiny `runtime_loader_override` package
+
+Result:
+
+- No observable change; still:
+  - `runtime_loader: /boot/system/lib/libroot.so: Troubles relocating: Bad data`
+
+Interpretation:
+
+- A separate package carrying `runtime_loader` does not effectively override the active loader in this boot path.
+
 ## Working conclusions
 
 1. **Do not rely on broad repacks for diagnosis right now**
@@ -151,3 +227,13 @@ These should be validated against the active package set in mounted `/boot/syste
 - `/workspace/tmp/caseOnlyRootPkg_plusgcc.usb.log`
 - `/workspace/tmp/caseOnlyRootPkg_plusgcc_icu.usb.log`
 - `/workspace/tmp/caseHaikuGenlibs.usb.log`
+- `/workspace/tmp/caseBaseline_pristine_hrev59637.usb.log`
+- `/workspace/tmp/casePristine_repackDepsOnly.usb.log`
+- `/workspace/tmp/casePristine_repackDeps_librootNP.usb.log`
+- `/workspace/tmp/casePristine_repackDeps_rtldNP.usb.log`
+- `/workspace/tmp/casePristine_repackDeps_rtldTopNP.usb.log`
+- `/workspace/tmp/casePristine_repackDeps_librootNP_launchNP.usb.log`
+- `/workspace/tmp/casePristine_repackDeps_librootNP_launchMinReg.usb.log`
+- `/workspace/tmp/casePristine_repackDeps_librootNP_launchEmpty.usb.log`
+- `/workspace/tmp/casePristine_pkgHaikuLaunchlibroot_repackDeps.usb.log`
+- `/workspace/tmp/casePristine_repackDeps_rtldPkg.usb.log`
