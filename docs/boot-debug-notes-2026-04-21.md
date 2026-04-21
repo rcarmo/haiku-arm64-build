@@ -193,6 +193,39 @@ Interpretation:
 
 - A separate package carrying `runtime_loader` does not effectively override the active loader in this boot path.
 
+---
+
+### Case K: Case G + repacked `haiku` containing generated `runtime_loader`
+
+Result:
+
+- No observable change versus Case G:
+  - `runtime_loader: /boot/system/lib/libroot.so: Troubles relocating: Bad data`
+
+Interpretation:
+
+- Replacing `runtime_loader` with the currently available generated binary had no effect.
+
+---
+
+### Case L: repacked deps + full generated launch/lib stack (libroot/libbe/libnetwork/libbnetapi/libbsd/launch_daemon + ICU74 overlays)
+
+Result:
+
+- Still fails at early userspace with:
+  - `thread_hit_serious_debug_event(): Failed to install debugger: thread: 26 (launch_daemon): Bad port ID`
+
+Interpretation:
+
+- Even a largely self-consistent generated stack does not avoid the early `launch_daemon` crash path.
+
+---
+
+### Build-lane note: runtime_loader rebuild currently blocked
+
+- `src/system/runtime_loader/arch/arm64/arch_relocate.cpp` is modified locally, but `generated.arm64/.../runtime_loader` is still byte-identical to stock (`sha256 8c210d01...`).
+- Attempting `jam runtime_loader` currently fails due missing C++ header feature setup in this bootstrap configuration (`fatal error: algorithm: No such file or directory`), so source-side runtime_loader changes are not yet reflected in produced binaries.
+
 ## Working conclusions
 
 1. **Do not rely on broad repacks for diagnosis right now**
@@ -237,3 +270,5 @@ These should be validated against the active package set in mounted `/boot/syste
 - `/workspace/tmp/casePristine_repackDeps_librootNP_launchEmpty.usb.log`
 - `/workspace/tmp/casePristine_pkgHaikuLaunchlibroot_repackDeps.usb.log`
 - `/workspace/tmp/casePristine_repackDeps_rtldPkg.usb.log`
+- `/workspace/tmp/casePristine_pkgHaikuRtld_repackDeps.usb.log`
+- `/workspace/tmp/caseRepackDeps_genstack74.usb.log`
