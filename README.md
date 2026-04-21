@@ -6,7 +6,11 @@ Reproducible build setup for Haiku OS ARM64 on Orange Pi 6 Plus.
 
 ## Status: Nearly Bootable
 
-The kernel loads, BFS mounts, drivers work. Blocked by packagefs not extracting zstd-compressed packages on arm64. See `notes/haiku-arm64-build.md` for full details.
+The kernel loads, BFS mounts, and basic drivers work.
+
+Current blocker: packagefs/runtime loading on ARM64 in QEMU still fails for some packaged libraries (seen as `Failed to decompress chunk data: Operation not supported` and follow-on loader failures).
+
+Detailed status/debug notes are tracked in [`docs/boot-debug-notes-2026-04-21.md`](docs/boot-debug-notes-2026-04-21.md).
 
 ## Quick Start
 
