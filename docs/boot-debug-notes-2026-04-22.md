@@ -1,4 +1,4 @@
-# ARM64 QEMU Boot Debug Notes (2026-04-21)
+# ARM64 QEMU Boot Debug Notes (2026-04-22)
 
 ## Scope
 
