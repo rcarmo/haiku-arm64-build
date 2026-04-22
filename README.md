@@ -4,13 +4,20 @@
 
 Reproducible build setup for Haiku OS ARM64 on Orange Pi 6 Plus.
 
-## Status: Nearly Bootable
+## Status: Nearly Bootable (as of 2026-04-22)
 
-The kernel loads, BFS mounts, and basic drivers work.
+The kernel loads, BFS mounts, and early userspace can progress in the validated QEMU lane.
 
-Current blocker: packagefs/runtime loading on ARM64 in QEMU still fails for some packaged libraries (seen as `Failed to decompress chunk data: Operation not supported` and follow-on loader failures).
+Current validated blocker:
 
-Detailed status/debug notes are tracked in [`docs/boot-debug-notes-2026-04-21.md`](docs/boot-debug-notes-2026-04-21.md).
+- user launch entries that source `env /system/boot/SetupEnvironment` can still trigger
+  `debug_server: Thread 51 ... Segment violation` + `consoled: error -4`
+- this persists even after fixing `launch_daemon` env tail parsing (`haiku` commit `5059bc3bc8`)
+- forcing the safe branch (`env SAFEMODE yes`) avoids that crash signature in current tests
+
+Historical packagefs decompression/runtime-loader findings are still relevant background, but the latest reproducer and matrix are documented here:
+
+- [`docs/boot-debug-notes-2026-04-21.md`](docs/boot-debug-notes-2026-04-21.md)
 
 ## Quick Start
 
