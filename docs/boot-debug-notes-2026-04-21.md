@@ -348,7 +348,34 @@ Fix applied in `haiku` branch `arm64-bootstrap-fixes`:
 - commit `5059bc3bc8`
 - change: use `end - chunk` for the trailing append length in `BaseJob::_GetSourceFileEnvironment()`
 
-Note: runtime validation in guest is pending a clean launch_daemon rebuild path in this bootstrap environment.
+Note: runtime validation in guest is now partially complete (see Case U below); clean-package confirmation is still pending.
+
+---
+
+### Case U: post-fix revalidation + `SetupEnvironment` line-by-line bisect
+
+Context:
+
+- Boot image: generated-stack/repacked-deps lane (`..._icu74_gcc133`) where `/boot/system/non-packaged/lib` contains bootstrap compatibility libs.
+- `launch_daemon` includes fix commit `5059bc3bc8`.
+
+Observed:
+
+- Full `env /system/boot/SetupEnvironment` still reproduces:
+  - `debug_server: Thread 51 entered the debugger: Segment violation`
+  - `consoled: error -4 starting console`
+- However, targeted script bisect shows this is **not** a generic env parser failure after the tail-length fix:
+  - minimal/locale/finddir-only fragments: no crash
+  - near-full script without the non-packaged lib-path branch: no crash
+  - adding only the SAFEMODE branch that sets extended `PATH`/`LIBRARY_PATH`/`ADDON_PATH` plus `locale` calls: crash returns deterministically
+  - same branch + `id`/`finddir` (without `locale`): no crash
+  - same `locale` calls but forcing `LIBRARY_PATH="%A/lib:/boot/system/lib"` (no non-packaged lib precedence): no crash
+
+Interpretation:
+
+- The remaining segfault signature in this lane is most consistent with `locale` (invoked by `SetupEnvironment`) loading incompatible libs from `/boot/system/non-packaged/lib` due the non-packaged-first `LIBRARY_PATH` branch.
+- This explains why `env /system/boot/SetupEnvironment` appeared to be the trigger in this configuration even after fixing `_GetSourceFileEnvironment()`.
+- Therefore, `5059bc3bc8` remains valid as a correctness fix, but this specific crash signature now points to library-overlay contamination in the repacked-deps test lane.
 
 ## Working conclusions
 
@@ -413,3 +440,11 @@ These should be validated against the active package set in mounted `/boot/syste
 - `/workspace/tmp/caseJobAppEnv.usb.log`
 - `/workspace/tmp/caseSvcTrueEnv.usb.log`
 - `/workspace/tmp/caseBisect_inputsvc_plus_game_screensaver.usb.log`
+- `/workspace/tmp/caseFull_r1.usb.log`
+- `/workspace/tmp/caseFull_r2.usb.log`
+- `/workspace/tmp/caseCombo3_r1.usb.log`
+- `/workspace/tmp/caseCombo3_r2.usb.log`
+- `/workspace/tmp/caseProbeA.usb.log`
+- `/workspace/tmp/caseProbeA0.usb.log`
+- `/workspace/tmp/caseProbeA_locale.usb.log`
+- `/workspace/tmp/caseProbeA_locale_syslib.usb.log`
