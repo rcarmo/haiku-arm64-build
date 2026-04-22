@@ -291,6 +291,58 @@ Interpretation:
 
 - Not specific to the generated `app_server` binary alone; likely shared runtime/library/adjacent service interaction in user session path.
 
+---
+
+### Case R: remove `env /system/boot/SetupEnvironment` from user-launched services
+
+Result:
+
+- With otherwise equivalent service launches, removing `env` eliminates the immediate crash signature.
+- Reproduced for both app and input service variants:
+  - no `debug_server ... Segment violation`
+  - no `consoled: error -4`
+
+Interpretation:
+
+- Crash trigger is strongly tied to launch-daemon environment source-file processing, not specifically to app_server/input_server binaries.
+
+---
+
+### Case S: `service /bin/true` with `env /system/boot/SetupEnvironment`
+
+Result:
+
+- Even a trivial service binary (`/bin/true`) reproduces the same crash signature when `env` is present:
+  - `debug_server: Thread 51 entered the debugger: Segment violation`
+  - `consoled: error -4 starting console`
+
+Interpretation:
+
+- Confirms this is not GUI-server specific; `env` handling itself is sufficient to trigger corruption/failure.
+
+---
+
+### Case T: `job app_server` + `env /system/boot/SetupEnvironment`
+
+Result:
+
+- Job mode (non-service) also crashes when `env` is added.
+
+Interpretation:
+
+- Distinguishes issue from service-vs-job semantics; the common factor is `env` source-file resolution path.
+
+---
+
+### Suspected code-level fault (high-confidence)
+
+`src/servers/launch/BaseJob.cpp`, `BaseJob::_GetSourceFileEnvironment()` appears to append the wrong byte count for trailing chunk data:
+
+- in the `separator == NULL` branch it calls `line.Append(chunk, bytesRead)`
+- `bytesRead` is for the whole buffer read, not the remaining chunk length
+
+This can over-append stale bytes and plausibly corrupt parsed environment strings/state.
+
 ## Working conclusions
 
 1. **Do not rely on broad repacks for diagnosis right now**
@@ -299,8 +351,9 @@ Interpretation:
    - Prevents dead-end panic loops and allows deeper boot diagnostics.
 3. **Primary blocker has moved to runtime loader + early service startup stability**
    - Missing dependencies and relocation faults combine into service crash cascades.
-4. **Current best reproducer is now in user session startup**
-   - With a coherent generated core stack and package decompression bypassed, crashes are reproducible when user launch includes `app_server` (or services it triggers), while no-autologin / empty user launch variants remain stable in the same time window.
+4. **Current best reproducer is now `env` processing in user launch jobs/services**
+   - With a coherent generated core stack and package decompression bypassed, adding `env /system/boot/SetupEnvironment` to user-launched entries (service or job) is sufficient to reproduce `Thread 51` segfault + `consoled -4`.
+   - Removing `env` from equivalent entries removes the crash in the same test window.
 
 ## Known recurring missing components in logs
 
@@ -347,3 +400,9 @@ These should be validated against the active package set in mounted `/boot/syste
 - `/workspace/tmp/casePkgGenServersCoreLaunchUserMin_repackDeps_icu74_gcc133.usb.log`
 - `/workspace/tmp/casePkgGenServersCoreLaunchUserApp_repackDeps_icu74_gcc133.usb.log`
 - `/workspace/tmp/casePkgCoreLaunchUserApp_stockapp_repackDeps_icu74_gcc133.usb.log`
+- `/workspace/tmp/caseSvcAppAltName.usb.log`
+- `/workspace/tmp/caseSvcAppNoEnv.usb.log`
+- `/workspace/tmp/caseSvcInputNoEnv.usb.log`
+- `/workspace/tmp/caseJobAppEnv.usb.log`
+- `/workspace/tmp/caseSvcTrueEnv.usb.log`
+- `/workspace/tmp/caseBisect_inputsvc_plus_game_screensaver.usb.log`
