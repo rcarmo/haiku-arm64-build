@@ -4,20 +4,22 @@
 
 Reproducible build setup for Haiku OS ARM64 on Orange Pi 6 Plus.
 
-## Status: Nearly Bootable (as of 2026-04-22)
+## Status: User session survives SetupEnvironment with consistent ICU74 (2026-04-22)
 
-The kernel loads, BFS mounts, and early userspace can progress in the validated QEMU lane.
+The kernel loads, BFS mounts, `launch_daemon` starts, and user session environment
+processing now completes without crashing when the package set contains a single
+consistent ICU version (ICU74).
 
-Current validated blocker:
+Confirmed causes of prior boot failures, in resolution order:
 
-- user launch entries that source `env /system/boot/SetupEnvironment` can still trigger
-  `debug_server: Thread 51 ... Segment violation` + `consoled: error -4`
-- this persists even after fixing `launch_daemon` env tail parsing (`haiku` commit `5059bc3bc8`)
-- forcing the safe branch (`env SAFEMODE yes`) avoids that crash signature in current tests
+1. SCSI CCB panic on USB storage emulation → fixed (`a0ee6cf196`)
+2. packagefs zstd decompression → worked around with uncompressed repacks
+3. `libroot.so` TLSDESC relocation → partially fixed (`daa993f414`, binary unverified)
+4. `launch_daemon` env tail parsing → fixed (`5059bc3bc8`)
+5. `Thread 51` / `consoled -4` crash on `SetupEnvironment` → **ICU version collision**
+   (icu-67.1 + ICU74 coexistence); resolved by using ICU74-only package set
 
-Historical packagefs decompression/runtime-loader findings are still relevant background, but the latest reproducer and matrix are documented here:
-
-- [`docs/boot-debug-notes-2026-04-22.md`](docs/boot-debug-notes-2026-04-22.md)
+Detailed experiment matrix: [`docs/boot-debug-notes-2026-04-22.md`](docs/boot-debug-notes-2026-04-22.md)
 
 ## Quick Start
 

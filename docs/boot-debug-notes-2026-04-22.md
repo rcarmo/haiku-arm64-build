@@ -409,6 +409,41 @@ Interpretation:
 - The remaining trigger is still tied to the non-safe `SetupEnvironment` path (notably `locale` + compatibility runtime mix), not a generic parser-tail corruption symptom.
 - Therefore, `5059bc3bc8` remains a valid correctness fix, but it is not sufficient by itself to eliminate this boot-lane crash signature.
 
+---
+
+### Case W: ICU version isolation — direct confirmation
+
+Hypothesis: the `Thread 51` / `consoled -4` crash when sourcing `SetupEnvironment`
+is caused by ICU67 and ICU74 coexisting in the package set, with `locale` loading
+the wrong version.
+
+Test matrix (all runs: fixed `launch_daemon`, `compat_bootstrap_runtime` = ICU74 +
+gcc13.3 + zlib/zstd, no non-packaged overlays, no `gcc_syslibs-13.2` or stock `zlib`):
+
+| Run | `icu-67.1` present | env mode | Result |
+|---|---|---|---|
+| `caseIcuBisect_noenv_noicu67` | No | none | **OK** |
+| `caseIcuBisect_env_noicu67` | No | `SetupEnvironment` | **OK** |
+| `caseIcuBisect_env_withicu67` | Yes | `SetupEnvironment` | **CRASH** |
+| `caseIcuBisect_safemode_noicu67` | No | `SAFEMODE=yes + SetupEnvironment` | **OK** |
+
+Interpretation:
+
+- **Root cause confirmed: ICU version collision.** The `Thread 51` / `consoled -4`
+  crash is fully explained by the simultaneous presence of `icu-67.1-2-arm64.hpkg`
+  (ICU67) and `compat_bootstrap_runtime` (ICU74) in the package set.
+- When only ICU74 is present, `env /system/boot/SetupEnvironment` with the full
+  non-safe branch (including `locale` calls) no longer crashes.
+- When ICU67 is re-added, the crash immediately returns.
+- `SAFEMODE=yes` avoids the crash by skipping the branch that sets the
+  non-packaged-first `LIBRARY_PATH` and runs `locale` — consistent with prior
+  bisect results.
+- The `5059bc3bc8` parser fix, SCSI anti-panic, and TLSDESC relocation fix are all
+  still necessary to reach this point; none of them are invalidated by this finding.
+
+**Current status: user session can reach and survive `SetupEnvironment` processing
+when the package set contains a consistent single ICU version.**
+
 ## Working conclusions
 
 1. **Do not rely on broad repacks for diagnosis right now**
@@ -417,13 +452,17 @@ Interpretation:
    - Prevents dead-end panic loops and allows deeper boot diagnostics.
 3. **Primary blocker has moved to runtime loader + early service startup stability**
    - Missing dependencies and relocation faults combine into service crash cascades.
-4. **Current best reproducer is now `env` processing in user launch jobs/services**
-   - With a coherent generated core stack and package decompression bypassed, adding `env /system/boot/SetupEnvironment` to user-launched entries (service or job) is sufficient to reproduce `Thread 51` segfault + `consoled -4`.
-   - Removing `env` from equivalent entries removes the crash in the same test window.
-5. **`5059bc3bc8` is a valid correctness fix, but not the final crash fix**
+4. **`env /system/boot/SetupEnvironment` crash is an ICU version collision, now confirmed**
+   - Presence of both ICU67 (`icu-67.1-2-arm64.hpkg`) and ICU74 (`compat_bootstrap_runtime`)
+     is the direct and sufficient trigger.
+   - With a single consistent ICU version (ICU74 only), `SetupEnvironment` survives
+     including `locale` calls under the full non-safe `LIBRARY_PATH` branch.
+5. **`5059bc3bc8` is a valid correctness fix**
    - The `_GetSourceFileEnvironment()` tail-length bug is fixed and runtime-tested.
-   - The remaining crash signature points to post-parse runtime behavior in the
-     sourced environment path, not the original stale-tail append defect.
+   - It does not interact with the ICU collision; both fixes are independently necessary.
+6. **TLSDESC relocation support (`daa993f414`) is committed but not yet binary-verified**
+   - `runtime_loader` rebuild is blocked by the bootstrap toolchain header gap.
+   - Verification should be done once the full build chain can be assembled.
 
 ## Known recurring missing components in logs
 
@@ -435,15 +474,14 @@ These should be validated against the active package set in mounted `/boot/syste
 
 ## Immediate next steps
 
-1. Isolate the `SetupEnvironment` crash to the minimal failing statement set around
-   the non-safe branch (`locale` + runtime-lib resolution).
-2. Capture runtime loader/library resolution evidence for the `locale` subprocess
-   (loaded images + symbol versions) in the failing vs `SAFEMODE=yes` paths.
-3. Verify whether the failure is ABI mismatch (icu/gcc syslibs generation skew) vs
-   loader behavior (search-path precedence and relocation/TLS edge cases).
-4. Keep package changes minimal and auditable: prefer small test packages and
-   avoid broad `haiku` repacks except for surgical binary replacement.
-5. Continue storing per-case logs under `/workspace/tmp/` with stable names for
+1. Assemble a fully ICU74-consistent package set (replace `icu-67.1-2-arm64.hpkg`
+   with a properly built ICU74 package for Haiku ARM64) and validate a full user
+   session boot including `app_server` and `input_server`.
+2. Unblock `runtime_loader` rebuild to verify the TLSDESC implementation
+   (`daa993f414`) in-guest with a real TLS-using shared library.
+3. Investigate the outstanding `libgame.so`/`libscreensaver.so` missing-dependency
+   warnings in input_server once the ICU issue no longer masks them.
+4. Continue storing per-case logs under `/workspace/tmp/` with stable names for
    deterministic diffs.
 
 ## Reference log files (session)
@@ -494,3 +532,7 @@ These should be validated against the active package set in mounted `/boot/syste
 - `/workspace/tmp/caseCleanLane_fixonly_pkgcompat_noenv.usb.log`
 - `/workspace/tmp/caseCleanLane_fixonly_pkgcompat_env.usb.log`
 - `/workspace/tmp/caseCleanLane_fixonly_pkgcompat_env_safemode.usb.log`
+- `/workspace/tmp/caseIcuBisect_noenv_noicu67.usb.log`
+- `/workspace/tmp/caseIcuBisect_env_noicu67.usb.log`
+- `/workspace/tmp/caseIcuBisect_env_withicu67.usb.log`
+- `/workspace/tmp/caseIcuBisect_safemode_noicu67.usb.log`
