@@ -31,6 +31,8 @@ Observed recurring failure signatures:
   `/system/boot/SetupEnvironment` in user launch context, including a `/bin/true`
   reproducer.
 - `env SAFEMODE yes` reliably suppresses this signature in current test lanes.
+- In the current ICU74-consistent package lane, `app_server`, `Tracker`, and `Deskbar`
+  have all been directly validated as launching.
 
 ## Repositories and branches
 
@@ -444,23 +446,79 @@ Interpretation:
 **Current status: user session can reach and survive `SetupEnvironment` processing
 when the package set contains a consistent single ICU version.**
 
+---
+
+### Case X: metadata-consistent ICU74 desktop lane
+
+To remove remaining package solver noise, two local test packages were created:
+
+- `compat_bootstrap_runtime-1-2-arm64.hpkg`
+  - extends the earlier runtime bundle with proper `provides` metadata for
+    `libgcc_s`, `libstdc++`, ICU74, zlib, zstd, and related runtime libs
+- `haiku-r1~beta5_hrev59637-1-arm64-genservers-corelaunch-icu74meta.hpkg`
+  - based on the generated core-launch package
+  - includes fixed `launch_daemon`
+  - adds generated `libroot-addon-icu.so`, `libmedia.so`, `libgame.so`,
+    `libscreensaver.so`
+  - updates `.PackageInfo` ICU requirements from `>=67.1` to `>=74.1`
+
+Result:
+
+- `package_daemon` reports `/boot/system` **consistent**.
+- No `Thread 51` segfault, no `consoled -4`, and no remaining ICU67 loader errors.
+
+Interpretation:
+
+- The package set is now coherent enough for a real desktop-lane validation.
+- The prior failures were not inherent to `SetupEnvironment` or the user session
+  graph once package metadata and runtime libs were made version-consistent.
+
+---
+
+### Case Y: wrapped desktop launch confirmation
+
+A final validation run wrapped the user-session launches to drop marker files before
+`exec`-ing each program:
+
+- `app_server`
+- `Tracker`
+- `Deskbar`
+
+Resulting markers after boot:
+
+- `marker-app_server-launch`: present
+- `marker-tracker-launch`: present
+- `marker-deskbar-launch`: present
+
+Interpretation:
+
+- The validated ICU74 desktop lane now launches the main desktop trio in-guest.
+- This is the strongest direct confirmation so far that the current boot lane is
+  past the earlier early-userspace blockers and into a functioning desktop session.
+
 ## Working conclusions
 
 1. **Do not rely on broad repacks for diagnosis right now**
    - They trigger packagefs decompression errors and add noise.
 2. **Keep SCSI anti-panic fix**
    - Prevents dead-end panic loops and allows deeper boot diagnostics.
-3. **Primary blocker has moved to runtime loader + early service startup stability**
-   - Missing dependencies and relocation faults combine into service crash cascades.
-4. **`env /system/boot/SetupEnvironment` crash is an ICU version collision, now confirmed**
+3. **The desktop lane now genuinely launches**
+   - With the ICU74-consistent package set, `app_server`, `Tracker`, and `Deskbar`
+     are all directly observed launching in-guest.
+4. **`env /system/boot/SetupEnvironment` crash is an ICU version collision, confirmed**
    - Presence of both ICU67 (`icu-67.1-2-arm64.hpkg`) and ICU74 (`compat_bootstrap_runtime`)
      is the direct and sufficient trigger.
    - With a single consistent ICU version (ICU74 only), `SetupEnvironment` survives
-     including `locale` calls under the full non-safe `LIBRARY_PATH` branch.
+     including `locale` calls under the full non-safe branch.
 5. **`5059bc3bc8` is a valid correctness fix**
    - The `_GetSourceFileEnvironment()` tail-length bug is fixed and runtime-tested.
    - It does not interact with the ICU collision; both fixes are independently necessary.
-6. **TLSDESC relocation support (`daa993f414`) is committed but not yet binary-verified**
+6. **Package metadata consistency matters, not just file presence**
+   - A runtime bundle without matching `provides` metadata still leaves `package_daemon`
+     reporting an inconsistent volume.
+   - Updating both runtime package `provides` and `haiku` ICU requirements was necessary
+     for a clean desktop-lane validation.
+7. **TLSDESC relocation support (`daa993f414`) is committed but not yet binary-verified**
    - `runtime_loader` rebuild is blocked by the bootstrap toolchain header gap.
    - Verification should be done once the full build chain can be assembled.
 
@@ -474,14 +532,17 @@ These should be validated against the active package set in mounted `/boot/syste
 
 ## Immediate next steps
 
-1. Assemble a fully ICU74-consistent package set (replace `icu-67.1-2-arm64.hpkg`
-   with a properly built ICU74 package for Haiku ARM64) and validate a full user
-   session boot including `app_server` and `input_server`.
-2. Unblock `runtime_loader` rebuild to verify the TLSDESC implementation
+1. Turn the validated local ICU74 desktop lane into a cleaner packaged solution:
+   either proper ICU74 packages for Haiku ARM64 or a reduced set of local runtime
+   packages with correct metadata and minimal divergence.
+2. Re-enable and validate more of the stock desktop/service graph beyond the
+   current core-launch lane (media stack, input add-ons, mail/network adjuncts).
+3. Unblock `runtime_loader` rebuild to verify the TLSDESC implementation
    (`daa993f414`) in-guest with a real TLS-using shared library.
-3. Investigate the outstanding `libgame.so`/`libscreensaver.so` missing-dependency
-   warnings in input_server once the ICU issue no longer masks them.
-4. Continue storing per-case logs under `/workspace/tmp/` with stable names for
+4. Reduce remaining boot noise (`activated-packages` warnings, `/etc/shadow`
+   warning) so the log surface is dominated by real blockers rather than image
+   assembly artifacts.
+5. Continue storing per-case logs under `/workspace/tmp/` with stable names for
    deterministic diffs.
 
 ## Reference log files (session)
@@ -536,3 +597,8 @@ These should be validated against the active package set in mounted `/boot/syste
 - `/workspace/tmp/caseIcuBisect_env_noicu67.usb.log`
 - `/workspace/tmp/caseIcuBisect_env_withicu67.usb.log`
 - `/workspace/tmp/caseIcuBisect_safemode_noicu67.usb.log`
+- `/workspace/tmp/caseFullDesktop_icu74only.usb.log`
+- `/workspace/tmp/caseFullDesktop_icu74kits_v2.usb.log`
+- `/workspace/tmp/caseFullDesktop_icu74meta.usb.log`
+- `/workspace/tmp/caseFullDesktop_icu74meta_markers.usb.log`
+- `/workspace/tmp/caseFullDesktop_icu74meta_wrapped.usb.log`
