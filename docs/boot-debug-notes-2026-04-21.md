@@ -23,6 +23,15 @@ Observed recurring failure signatures:
 - `runtime_loader: ... Troubles relocating: Bad data`
 - `debug_server: Thread <id> entered the debugger: Segment violation`
 
+## Latest validated status (2026-04-22)
+
+- `launch_daemon` env tail parsing fix is implemented in `haiku` commit `5059bc3bc8`.
+- Clean-package validation has been completed (Case V), not just overlay-lane testing.
+- Remaining `Thread 51`/`consoled -4` crash signature is still tied to sourcing
+  `/system/boot/SetupEnvironment` in user launch context, including a `/bin/true`
+  reproducer.
+- `env SAFEMODE yes` reliably suppresses this signature in current test lanes.
+
 ## Repositories and branches
 
 ### `haiku` repository
@@ -411,6 +420,10 @@ Interpretation:
 4. **Current best reproducer is now `env` processing in user launch jobs/services**
    - With a coherent generated core stack and package decompression bypassed, adding `env /system/boot/SetupEnvironment` to user-launched entries (service or job) is sufficient to reproduce `Thread 51` segfault + `consoled -4`.
    - Removing `env` from equivalent entries removes the crash in the same test window.
+5. **`5059bc3bc8` is a valid correctness fix, but not the final crash fix**
+   - The `_GetSourceFileEnvironment()` tail-length bug is fixed and runtime-tested.
+   - The remaining crash signature points to post-parse runtime behavior in the
+     sourced environment path, not the original stale-tail append defect.
 
 ## Known recurring missing components in logs
 
@@ -422,11 +435,16 @@ These should be validated against the active package set in mounted `/boot/syste
 
 ## Immediate next steps
 
-1. Run with the most pristine package set possible (no broad repack).
-2. Add only minimal, auditable overlays needed for single-hypothesis tests.
-3. Instrument `launch_daemon` startup sequence and correlate thread IDs to binary/service names.
-4. Re-validate ARM64 relocation/TLS handling in runtime loader against current failing binaries.
-5. Keep test output logs per case under `/workspace/tmp/` with stable naming for diffing.
+1. Isolate the `SetupEnvironment` crash to the minimal failing statement set around
+   the non-safe branch (`locale` + runtime-lib resolution).
+2. Capture runtime loader/library resolution evidence for the `locale` subprocess
+   (loaded images + symbol versions) in the failing vs `SAFEMODE=yes` paths.
+3. Verify whether the failure is ABI mismatch (icu/gcc syslibs generation skew) vs
+   loader behavior (search-path precedence and relocation/TLS edge cases).
+4. Keep package changes minimal and auditable: prefer small test packages and
+   avoid broad `haiku` repacks except for surgical binary replacement.
+5. Continue storing per-case logs under `/workspace/tmp/` with stable names for
+   deterministic diffs.
 
 ## Reference log files (session)
 
