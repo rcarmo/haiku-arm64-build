@@ -343,6 +343,13 @@ Interpretation:
 
 This can over-append stale bytes and plausibly corrupt parsed environment strings/state.
 
+Fix applied in `haiku` branch `arm64-bootstrap-fixes`:
+
+- commit `5059bc3bc8`
+- change: use `end - chunk` for the trailing append length in `BaseJob::_GetSourceFileEnvironment()`
+
+Note: runtime validation in guest is pending a clean launch_daemon rebuild path in this bootstrap environment.
+
 ## Working conclusions
 
 1. **Do not rely on broad repacks for diagnosis right now**
