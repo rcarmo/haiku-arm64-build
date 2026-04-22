@@ -370,6 +370,7 @@ Observed:
   - adding only the SAFEMODE branch that sets extended `PATH`/`LIBRARY_PATH`/`ADDON_PATH` plus `locale` calls: crash returns deterministically
   - same branch + `id`/`finddir` (without `locale`): no crash
   - same `locale` calls but forcing `LIBRARY_PATH="%A/lib:/boot/system/lib"` (no non-packaged lib precedence): no crash
+- full script with `env SAFEMODE yes` (forcing safe branch in `SetupEnvironment`): no crash
 
 Interpretation:
 
