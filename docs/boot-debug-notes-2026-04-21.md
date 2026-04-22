@@ -348,7 +348,7 @@ Fix applied in `haiku` branch `arm64-bootstrap-fixes`:
 - commit `5059bc3bc8`
 - change: use `end - chunk` for the trailing append length in `BaseJob::_GetSourceFileEnvironment()`
 
-Note: runtime validation in guest is now partially complete (see Case U below); clean-package confirmation is still pending.
+Note: runtime validation in guest is now complete for both non-packaged-overlay and clean-package lanes (Cases U and V below).
 
 ---
 
@@ -370,13 +370,35 @@ Observed:
   - adding only the SAFEMODE branch that sets extended `PATH`/`LIBRARY_PATH`/`ADDON_PATH` plus `locale` calls: crash returns deterministically
   - same branch + `id`/`finddir` (without `locale`): no crash
   - same `locale` calls but forcing `LIBRARY_PATH="%A/lib:/boot/system/lib"` (no non-packaged lib precedence): no crash
-- full script with `env SAFEMODE yes` (forcing safe branch in `SetupEnvironment`): no crash
+  - full script with `env SAFEMODE yes` (forcing safe branch in `SetupEnvironment`): no crash
 
 Interpretation:
 
-- The remaining segfault signature in this lane is most consistent with `locale` (invoked by `SetupEnvironment`) loading incompatible libs from `/boot/system/non-packaged/lib` due the non-packaged-first `LIBRARY_PATH` branch.
-- This explains why `env /system/boot/SetupEnvironment` appeared to be the trigger in this configuration even after fixing `_GetSourceFileEnvironment()`.
-- Therefore, `5059bc3bc8` remains valid as a correctness fix, but this specific crash signature now points to library-overlay contamination in the repacked-deps test lane.
+- In this lane, the segfault is consistent with `locale` (invoked by `SetupEnvironment`) loading incompatible compatibility libs through the non-packaged-first `LIBRARY_PATH` branch.
+
+---
+
+### Case V: clean-package validation (no non-packaged compat overlays)
+
+Context:
+
+- Created `haiku-r1~beta5_hrev59637-1-arm64-corelaunch-usersvctrue-fixonly.hpkg` by taking the known-stable `corelaunch-usersvctrue` package and replacing only `servers/launch_daemon` with the post-fix binary.
+- Added a packaged compatibility bundle (`compat_bootstrap_runtime-1-1-arm64.hpkg`) for gcc13.3/icu74/zlib/zstd under `/boot/system/packages`.
+- Explicitly removed runtime compat libs from `/boot/system/non-packaged/lib`.
+
+Observed:
+
+- Control run (no extra env-sourced service): no `Thread 51` segfault and no `consoled -4`.
+- Adding `service test-env { env /system/boot/SetupEnvironment; launch /bin/true; }` reproduces:
+  - `debug_server: Thread 51 entered the debugger: Segment violation`
+  - `consoled: error -4 starting console`
+- Adding `env SAFEMODE yes` before sourcing `SetupEnvironment` removes the crash again.
+
+Interpretation:
+
+- Clean-package confirmation is complete: the crash persists with fixed `launch_daemon` even without non-packaged overlays.
+- The remaining trigger is still tied to the non-safe `SetupEnvironment` path (notably `locale` + compatibility runtime mix), not a generic parser-tail corruption symptom.
+- Therefore, `5059bc3bc8` remains a valid correctness fix, but it is not sufficient by itself to eliminate this boot-lane crash signature.
 
 ## Working conclusions
 
@@ -449,3 +471,8 @@ These should be validated against the active package set in mounted `/boot/syste
 - `/workspace/tmp/caseProbeA0.usb.log`
 - `/workspace/tmp/caseProbeA_locale.usb.log`
 - `/workspace/tmp/caseProbeA_locale_syslib.usb.log`
+- `/workspace/tmp/caseCleanLane_envfix_noNP.usb.log`
+- `/workspace/tmp/caseCleanLane_envfix_pkgcompat.usb.log`
+- `/workspace/tmp/caseCleanLane_fixonly_pkgcompat_noenv.usb.log`
+- `/workspace/tmp/caseCleanLane_fixonly_pkgcompat_env.usb.log`
+- `/workspace/tmp/caseCleanLane_fixonly_pkgcompat_env_safemode.usb.log`
