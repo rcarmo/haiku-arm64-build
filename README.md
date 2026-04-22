@@ -17,7 +17,7 @@ Current validated blocker:
 
 Historical packagefs decompression/runtime-loader findings are still relevant background, but the latest reproducer and matrix are documented here:
 
-- [`docs/boot-debug-notes-2026-04-21.md`](docs/boot-debug-notes-2026-04-21.md)
+- [`docs/boot-debug-notes-2026-04-22.md`](docs/boot-debug-notes-2026-04-22.md)
 
 ## Quick Start
 
