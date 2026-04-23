@@ -4,10 +4,18 @@
 
 Reproducible build setup for Haiku OS ARM64 on Orange Pi 6 Plus.
 
-## Status: desktop session now launches in the validated ICU74 lane (2026-04-22)
+## Status: Nearly Bootable (2026-04-23)
 
 The kernel loads, BFS mounts, `launch_daemon` starts, and the desktop user-session
-path now launches successfully in the current validated QEMU lane.
+path now launches in the validated ICU74 lane. The remaining work is mostly around
+turning that validated lane into a cleaner, less ad-hoc packaged build and making the
+framebuffer/desktop behavior more reliable in unattended harness runs.
+
+![Latest QEMU desktop capture](docs/haiku-desktop-qemu-2026-04-23.png)
+
+_The screenshot above is the latest detached-harness framebuffer capture. It is still
+not a strong proof of desktop usability by itself — the stronger signal remains the
+in-guest marker validation for `app_server`, `Tracker`, and `Deskbar` launches._
 
 Directly validated in-guest:
 
@@ -27,7 +35,7 @@ Confirmed causes of prior boot failures, in resolution order:
 5. `Thread 51` / `consoled -4` crash on `SetupEnvironment` → **ICU version collision**
    (icu-67.1 + ICU74 coexistence); resolved by using an ICU74-consistent package set
 
-Detailed experiment matrix: [`docs/boot-debug-notes-2026-04-22.md`](docs/boot-debug-notes-2026-04-22.md)
+Detailed experiment matrix: [`docs/boot-debug-notes-2026-04-23.md`](docs/boot-debug-notes-2026-04-23.md)
 
 ## Quick Start
 
@@ -37,6 +45,7 @@ make clone       # clone haiku + buildtools repos
 make toolchain   # build cross-compiler (~15 min)
 make image       # build minimum MMC image (~5 min)
 make test        # QEMU smoke test (30s)
+make desktop-image  # assemble the validated ICU74 desktop test image
 ```
 
 ## Early Validation Harness
