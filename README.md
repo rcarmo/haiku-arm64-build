@@ -39,6 +39,38 @@ make image       # build minimum MMC image (~5 min)
 make test        # QEMU smoke test (30s)
 ```
 
+## Early Validation Harness
+
+For later regression work, the repo now includes a small QEMU desktop harness:
+
+```sh
+make desktop-run         # start the validated desktop image under detached tmux
+make desktop-capture     # start detached, wait for desktop markers, save screenshot
+make desktop-screenshot  # save a framebuffer screenshot from the detached run
+make desktop-stop        # stop the detached tmux session
+make desktop-validate    # headless validation using injected marker jobs
+```
+
+The harness script is:
+
+- `scripts/qemu-desktop-harness.sh`
+
+Current defaults:
+
+- graphical run image: `/workspace/tmp/caseFullDesktop_icu74meta.boot.img`
+- validation image: `/workspace/tmp/caseFullDesktop_icu74meta.boot.img`
+
+`make desktop-run` writes a stable tmux/state/monitor setup under:
+
+- `/workspace/tmp/haiku-boot-harness/`
+
+The validation mode boots headlessly, injects a temporary `user_launch` wrapper into a
+writable copy of the image, captures the serial log, and verifies launch markers for:
+
+- `app_server`
+- `Tracker`
+- `Deskbar`
+
 ## QEMU Boot (working)
 
 ```sh
