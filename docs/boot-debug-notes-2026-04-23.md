@@ -1,4 +1,4 @@
-# ARM64 QEMU Boot Debug Notes (2026-04-22)
+# ARM64 QEMU Boot Debug Notes (2026-04-23)
 
 ## Scope
 
@@ -23,16 +23,14 @@ Observed recurring failure signatures:
 - `runtime_loader: ... Troubles relocating: Bad data`
 - `debug_server: Thread <id> entered the debugger: Segment violation`
 
-## Latest validated status (2026-04-22)
+## Latest validated status (2026-04-23)
 
 - `launch_daemon` env tail parsing fix is implemented in `haiku` commit `5059bc3bc8`.
 - Clean-package validation has been completed (Case V), not just overlay-lane testing.
-- Remaining `Thread 51`/`consoled -4` crash signature is still tied to sourcing
-  `/system/boot/SetupEnvironment` in user launch context, including a `/bin/true`
-  reproducer.
-- `env SAFEMODE yes` reliably suppresses this signature in current test lanes.
-- In the current ICU74-consistent package lane, `app_server`, `Tracker`, and `Deskbar`
-  have all been directly validated as launching.
+- The `Thread 51` / `consoled -4` crash has been traced to ICU67/ICU74 coexistence, and the validated ICU74-only lane no longer reproduces it.
+- In the current ICU74-consistent package lane, `app_server`, `Tracker`, and `Deskbar` have all been directly validated as launching.
+- A reproducible local build target now exists for the validated desktop image (`make desktop-image`).
+- A detached tmux/QEMU harness exists for later regression work, but the latest unattended framebuffer capture is still black/stalled; marker validation remains the stronger proof than the screenshot alone.
 
 ## Repositories and branches
 
@@ -496,6 +494,53 @@ Interpretation:
 - This is the strongest direct confirmation so far that the current boot lane is
   past the earlier early-userspace blockers and into a functioning desktop session.
 
+---
+
+### Case Z: reproducible ICU74 desktop image target
+
+The ad-hoc local package assembly used for Cases X/Y has now been codified into a
+repo-shipped build script and Makefile target:
+
+- script: `scripts/build-validated-desktop-image.sh`
+- target: `make desktop-image`
+- output image: `/workspace/tmp/haiku-build/validated/haiku-arm64-icu74-desktop.boot.img`
+
+What this target does:
+
+- rebuilds the `compat_bootstrap_runtime-1-2-arm64.hpkg` local runtime bundle
+- rebuilds the ICU74-consistent `haiku` package variant from the generated core-launch lane
+- assembles a bootable MMC image from the nightly base with the conflicting ICU67/gcc/zlib packages removed and the validated ICU74 packages installed
+
+Interpretation:
+
+- The validated desktop lane is now reproducible from the repo, rather than living only as one-off shell history and temp artifacts.
+
+---
+
+### Case AA: detached tmux harness and screenshot follow-up
+
+The repo now also includes an async QEMU harness for later early-validation work:
+
+- script: `scripts/qemu-desktop-harness.sh`
+- Make targets:
+  - `make desktop-run`
+  - `make desktop-status`
+  - `make desktop-logs`
+  - `make desktop-attach`
+  - `make desktop-screenshot`
+  - `make desktop-stop`
+
+Observed behavior:
+
+- detached QEMU/tmux runs are useful for checking logs and grabbing framebuffer dumps without blocking the agent
+- the latest framebuffer screenshot added to the README is still black / not a trustworthy proof of desktop usability
+- the serial log in that detached run eventually stopped making useful progress, so the screenshot is weaker evidence than the marker-based `app_server`/`Tracker`/`Deskbar` validation from Case Y
+
+Interpretation:
+
+- The harness is good enough for regression fishing and unattended boot checks.
+- It should not yet be treated as proof that the visual desktop is stable; for now, the direct marker validation remains authoritative.
+
 ## Working conclusions
 
 1. **Do not rely on broad repacks for diagnosis right now**
@@ -505,20 +550,22 @@ Interpretation:
 3. **The desktop lane now genuinely launches**
    - With the ICU74-consistent package set, `app_server`, `Tracker`, and `Deskbar`
      are all directly observed launching in-guest.
-4. **`env /system/boot/SetupEnvironment` crash is an ICU version collision, confirmed**
+4. **The validated desktop lane is now reproducible from the repo**
+   - `make desktop-image` assembles the current ICU74 desktop test image from the nightly base plus the validated local runtime/package overlays.
+5. **`env /system/boot/SetupEnvironment` crash is an ICU version collision, confirmed**
    - Presence of both ICU67 (`icu-67.1-2-arm64.hpkg`) and ICU74 (`compat_bootstrap_runtime`)
      is the direct and sufficient trigger.
    - With a single consistent ICU version (ICU74 only), `SetupEnvironment` survives
      including `locale` calls under the full non-safe branch.
-5. **`5059bc3bc8` is a valid correctness fix**
+6. **`5059bc3bc8` is a valid correctness fix**
    - The `_GetSourceFileEnvironment()` tail-length bug is fixed and runtime-tested.
    - It does not interact with the ICU collision; both fixes are independently necessary.
-6. **Package metadata consistency matters, not just file presence**
+7. **Package metadata consistency matters, not just file presence**
    - A runtime bundle without matching `provides` metadata still leaves `package_daemon`
      reporting an inconsistent volume.
    - Updating both runtime package `provides` and `haiku` ICU requirements was necessary
      for a clean desktop-lane validation.
-7. **TLSDESC relocation support (`daa993f414`) is committed but not yet binary-verified**
+8. **TLSDESC relocation support (`daa993f414`) is committed but not yet binary-verified**
    - `runtime_loader` rebuild is blocked by the bootstrap toolchain header gap.
    - Verification should be done once the full build chain can be assembled.
 
@@ -537,12 +584,14 @@ These should be validated against the active package set in mounted `/boot/syste
    packages with correct metadata and minimal divergence.
 2. Re-enable and validate more of the stock desktop/service graph beyond the
    current core-launch lane (media stack, input add-ons, mail/network adjuncts).
-3. Unblock `runtime_loader` rebuild to verify the TLSDESC implementation
+3. Improve the detached tmux harness so desktop-readiness detection is more robust
+   than the current combination of serial-log heuristics and framebuffer dumps.
+4. Unblock `runtime_loader` rebuild to verify the TLSDESC implementation
    (`daa993f414`) in-guest with a real TLS-using shared library.
-4. Reduce remaining boot noise (`activated-packages` warnings, `/etc/shadow`
+5. Reduce remaining boot noise (`activated-packages` warnings, `/etc/shadow`
    warning) so the log surface is dominated by real blockers rather than image
    assembly artifacts.
-5. Continue storing per-case logs under `/workspace/tmp/` with stable names for
+6. Continue storing per-case logs under `/workspace/tmp/` with stable names for
    deterministic diffs.
 
 ## Reference log files (session)
@@ -602,3 +651,8 @@ These should be validated against the active package set in mounted `/boot/syste
 - `/workspace/tmp/caseFullDesktop_icu74meta.usb.log`
 - `/workspace/tmp/caseFullDesktop_icu74meta_markers.usb.log`
 - `/workspace/tmp/caseFullDesktop_icu74meta_wrapped.usb.log`
+- `/workspace/tmp/haiku-boot-harness/caseFullDesktop_icu74meta.boot.20260423-070055.serial.log`
+- `/workspace/tmp/haiku-boot-harness/caseFullDesktop_icu74meta.boot.20260423-070055.capture.log`
+- `/workspace/tmp/haiku-boot-harness/haiku-desktop.ppm`
+- `/workspace/tmp/haiku-boot-harness/haiku-desktop.png`
+- `/workspace/tmp/haiku-build/validated/haiku-arm64-icu74-desktop.boot.img`
