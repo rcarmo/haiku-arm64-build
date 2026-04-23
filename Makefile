@@ -138,7 +138,15 @@ desktop-image:
 	OUTPUT_IMAGE="$(DESKTOP_BUILD_IMAGE)" $(CURDIR)/scripts/build-validated-desktop-image.sh
 
 desktop-stop:
-	-@tmux kill-session -t $(DESKTOP_TMUX_SESSION) 2>/dev/null || true
+	@chmod +x $(CURDIR)/scripts/qemu-desktop-harness.sh
+	-@$(CURDIR)/scripts/qemu-desktop-harness.sh stop \
+		--tmux-session "$(DESKTOP_TMUX_SESSION)" \
+		--state-file "$(DESKTOP_STATE_FILE)" \
+		--monitor-socket "$(DESKTOP_MONITOR_SOCKET)" >/dev/null 2>&1 || true
+	-@python3 -c "import os,signal; needles=['/workspace/tmp/haiku-boot-harness/','tracker-shot-'];\
+for pid in [p for p in os.listdir('/proc') if p.isdigit()]:\
+\n    cmd=open(f'/proc/{pid}/cmdline','rb').read().replace(b'\\0',b' ').decode('utf-8','ignore') if os.path.exists(f'/proc/{pid}/cmdline') else '';\
+\n    (('qemu-system-aarch64' in cmd and any(n in cmd for n in needles)) and os.kill(int(pid), signal.SIGTERM))" 2>/dev/null || true
 	@echo "✅ Desktop session stopped (if it was running)"
 
 desktop-run: desktop-stop

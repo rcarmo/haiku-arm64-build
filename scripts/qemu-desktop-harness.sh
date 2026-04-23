@@ -17,9 +17,12 @@ TMUX_SESSION=${TMUX_SESSION:-}
 STATE_FILE=${STATE_FILE:-}
 MONITOR_SOCKET=${MONITOR_SOCKET:-}
 SCREENSHOT_OUT=${SCREENSHOT_OUT:-}
+WORK_IMAGE=${WORK_IMAGE:-}
+LOG_FILE=${LOG_FILE:-}
+SERIAL_LOG=${SERIAL_LOG:-}
 
-DEFAULT_RUN_IMAGE=/workspace/tmp/caseFullDesktop_icu74meta.boot.img
-DEFAULT_VALIDATE_IMAGE=/workspace/tmp/caseFullDesktop_icu74meta.boot.img
+DEFAULT_RUN_IMAGE=/workspace/tmp/haiku-build/validated/haiku-arm64-icu74-desktop.boot.img
+DEFAULT_VALIDATE_IMAGE=/workspace/tmp/haiku-build/validated/haiku-arm64-icu74-desktop.boot.img
 FILE_MARKERS=(
   /boot/home/config/settings/marker-app_server-launch
   /boot/home/config/settings/marker-tracker-launch
@@ -31,13 +34,14 @@ POLL_SECS=5
 usage() {
   cat <<'EOF'
 Usage:
-  qemu-desktop-harness.sh [run|capture|validate|screenshot] [options]
+  qemu-desktop-harness.sh [run|capture|validate|screenshot|stop] [options]
 
 Modes:
   run         Start the validated desktop image under detached tmux.
   capture     Start under detached tmux, wait for desktop markers, save a screenshot.
   validate    Boot headlessly and verify desktop launch markers.
   screenshot  Save a framebuffer screenshot from a running tmux/QEMU session.
+  stop        Stop a detached tmux/QEMU session and clean related sockets.
 
 Options:
   --image PATH            Image to boot.
@@ -52,8 +56,8 @@ Options:
   --help                  Show this help.
 
 Defaults:
-  run/capture image: /workspace/tmp/caseFullDesktop_icu74meta.boot.img
-  validate image:    /workspace/tmp/caseFullDesktop_icu74meta.boot.img
+  run/capture image: /workspace/tmp/haiku-build/validated/haiku-arm64-icu74-desktop.boot.img
+  validate image:    /workspace/tmp/haiku-build/validated/haiku-arm64-icu74-desktop.boot.img
 EOF
 }
 
@@ -91,7 +95,7 @@ trap cleanup EXIT
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    run|capture|validate|screenshot)
+    run|capture|validate|screenshot|stop)
       MODE=$1
       shift
       ;;
@@ -172,6 +176,21 @@ PY
 
   require_file "$SCREENSHOT_OUT"
   echo "screenshot: $SCREENSHOT_OUT"
+  exit 0
+fi
+
+if [[ "$MODE" == "stop" ]]; then
+  load_state_if_needed
+  if [[ -n "$TMUX_SESSION" ]]; then
+    tmux has-session -t "$TMUX_SESSION" 2>/dev/null && tmux kill-session -t "$TMUX_SESSION" || true
+  fi
+  if [[ -n "$WORK_IMAGE" ]]; then
+    pkill -f "qemu-system-aarch64.*${WORK_IMAGE}" 2>/dev/null || true
+  fi
+  if [[ -n "$MONITOR_SOCKET" ]]; then
+    rm -f "$MONITOR_SOCKET"
+  fi
+  echo "stopped detached session"
   exit 0
 fi
 
@@ -276,6 +295,12 @@ target desktop {
 
 	service x-vnd.Be-TSKB {
 		launch /bin/sh -c 'echo deskbar >/boot/home/config/settings/marker-deskbar-launch; sync; exec /system/Deskbar'
+		on initial_volumes_mounted
+	}
+
+	job open-home-window {
+		launch /system/Tracker /boot/home
+		requires x-vnd.Be-TRAK
 		on initial_volumes_mounted
 	}
 
