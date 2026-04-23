@@ -6,8 +6,15 @@ BUILD_DIR     := $(HAIKU_DIR)/generated.arm64
 BUILDTOOLS_DIR := $(CURDIR)/buildtools
 NPROC         := $(shell nproc)
 IMAGE         := $(BUILD_DIR)/haiku-mmc.image
+DESKTOP_RUN_IMAGE := /workspace/tmp/caseFullDesktop_icu74meta.boot.img
+DESKTOP_VALIDATE_IMAGE := /workspace/tmp/caseFullDesktop_icu74meta.boot.img
+DESKTOP_HARNESS_DIR := /workspace/tmp/haiku-boot-harness
+DESKTOP_TMUX_SESSION := haiku-desktop
+DESKTOP_STATE_FILE := $(DESKTOP_HARNESS_DIR)/$(DESKTOP_TMUX_SESSION).state
+DESKTOP_MONITOR_SOCKET := $(DESKTOP_HARNESS_DIR)/$(DESKTOP_TMUX_SESSION).monitor.sock
+DESKTOP_SCREENSHOT := $(DESKTOP_HARNESS_DIR)/$(DESKTOP_TMUX_SESSION).ppm
 
-.PHONY: all toolchain image clean update test help
+.PHONY: all toolchain image clean update test help desktop-run desktop-capture desktop-stop desktop-screenshot desktop-validate
 
 help:
 	@echo "Haiku ARM64 Build System"
@@ -20,6 +27,11 @@ help:
 	@echo "  raw        - Build raw images (esp.image + haiku-minimum.image)"
 	@echo "  test       - Quick QEMU smoke test (30s)"
 	@echo "  test-long  - Extended QEMU test (120s)"
+	@echo "  desktop-run        - Start validated desktop image under detached tmux"
+	@echo "  desktop-capture    - Start detached, wait for desktop markers, save screenshot"
+	@echo "  desktop-stop       - Stop the detached desktop tmux session"
+	@echo "  desktop-screenshot - Save a framebuffer screenshot from the detached session"
+	@echo "  desktop-validate   - Headless marker-based desktop validation harness"
 	@echo "  update     - Git pull both repos"
 	@echo "  clean      - Remove generated.arm64"
 	@echo "  distclean  - Remove everything (repos + generated)"
@@ -113,3 +125,38 @@ bootstrap: toolchain
 	cd $(BUILD_DIR) && jam -j$(NPROC) -q @bootstrap-mmc
 	@echo "✅ Bootstrap image built"
 	@ls -lh $(BUILD_DIR)/haiku-mmc.image
+
+desktop-stop:
+	-@tmux kill-session -t $(DESKTOP_TMUX_SESSION) 2>/dev/null || true
+	@echo "✅ Desktop session stopped (if it was running)"
+
+desktop-run: desktop-stop
+	@mkdir -p $(DESKTOP_HARNESS_DIR)
+	@chmod +x $(CURDIR)/scripts/qemu-desktop-harness.sh
+	$(CURDIR)/scripts/qemu-desktop-harness.sh run \
+		--image "$(DESKTOP_RUN_IMAGE)" \
+		--tmux-session "$(DESKTOP_TMUX_SESSION)" \
+		--state-file "$(DESKTOP_STATE_FILE)" \
+		--monitor-socket "$(DESKTOP_MONITOR_SOCKET)"
+
+desktop-capture: desktop-stop
+	@mkdir -p $(DESKTOP_HARNESS_DIR)
+	@chmod +x $(CURDIR)/scripts/qemu-desktop-harness.sh
+	$(CURDIR)/scripts/qemu-desktop-harness.sh capture \
+		--image "$(DESKTOP_RUN_IMAGE)" \
+		--tmux-session "$(DESKTOP_TMUX_SESSION)" \
+		--state-file "$(DESKTOP_STATE_FILE)" \
+		--monitor-socket "$(DESKTOP_MONITOR_SOCKET)" \
+		--screenshot-out "$(DESKTOP_SCREENSHOT)"
+	@echo "✅ Screenshot saved: $(DESKTOP_SCREENSHOT)"
+
+desktop-screenshot:
+	@chmod +x $(CURDIR)/scripts/qemu-desktop-harness.sh
+	$(CURDIR)/scripts/qemu-desktop-harness.sh screenshot \
+		--state-file "$(DESKTOP_STATE_FILE)" \
+		--screenshot-out "$(DESKTOP_SCREENSHOT)"
+	@echo "✅ Screenshot saved: $(DESKTOP_SCREENSHOT)"
+
+desktop-validate:
+	@chmod +x $(CURDIR)/scripts/qemu-desktop-harness.sh
+	$(CURDIR)/scripts/qemu-desktop-harness.sh validate --image "$(DESKTOP_VALIDATE_IMAGE)"
