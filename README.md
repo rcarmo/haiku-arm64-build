@@ -4,18 +4,17 @@
 
 Reproducible build setup for Haiku OS ARM64 on Orange Pi 6 Plus.
 
-## Status: Nearly Bootable (2026-04-23)
+## Status: Boots to Desktop in the Validated ICU74 Lane (2026-04-23)
 
+Haiku ARM64 now **boots to a desktop session in QEMU** in the validated ICU74 lane.
 The kernel loads, BFS mounts, `launch_daemon` starts, and the desktop user-session
-path now launches in the validated ICU74 lane. The remaining work is mostly around
-turning that validated lane into a cleaner, less ad-hoc packaged build and making the
-framebuffer/desktop behavior more reliable in unattended harness runs.
+comes up far enough to launch `app_server`, `Tracker`, and `Deskbar`.
 
-![Latest QEMU desktop capture](docs/haiku-desktop-qemu-2026-04-23.png)
+![QEMU desktop capture with Tracker visible](docs/haiku-desktop-tracker-qemu-2026-04-23.png)
 
-_The screenshot above is the latest detached-harness framebuffer capture. It is still
-not a strong proof of desktop usability by itself — the stronger signal remains the
-in-guest marker validation for `app_server`, `Tracker`, and `Deskbar` launches._
+_This screenshot shows the current validated boot lane with Tracker visible. This is
+still a local, curated ICU74 package set rather than a clean upstream-quality image,
+but it is now accurate to say the project boots to desktop in this lane._
 
 Directly validated in-guest:
 

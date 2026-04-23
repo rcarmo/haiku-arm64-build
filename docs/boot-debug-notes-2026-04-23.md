@@ -29,8 +29,9 @@ Observed recurring failure signatures:
 - Clean-package validation has been completed (Case V), not just overlay-lane testing.
 - The `Thread 51` / `consoled -4` crash has been traced to ICU67/ICU74 coexistence, and the validated ICU74-only lane no longer reproduces it.
 - In the current ICU74-consistent package lane, `app_server`, `Tracker`, and `Deskbar` have all been directly validated as launching.
+- The validated ICU74 lane now boots to a visible desktop session in QEMU; a later screenshot with Tracker visible has been added to the README/docs.
 - A reproducible local build target now exists for the validated desktop image (`make desktop-image`).
-- A detached tmux/QEMU harness exists for later regression work, but the latest unattended framebuffer capture is still black/stalled; marker validation remains the stronger proof than the screenshot alone.
+- A detached tmux/QEMU harness exists for later regression work; the harness is useful for unattended boot fishing, but marker validation is still the stronger proof signal than framebuffer screenshots alone.
 
 ## Repositories and branches
 
