@@ -44,8 +44,11 @@ make test        # QEMU smoke test (30s)
 For later regression work, the repo now includes a small QEMU desktop harness:
 
 ```sh
-make desktop-run         # start the validated desktop image under detached tmux
-make desktop-capture     # start detached, wait for desktop markers, save screenshot
+make desktop-image       # assemble the validated ICU74 desktop boot image
+make desktop-run         # start that image under detached tmux
+make desktop-status      # print session/log/state info and recent serial output
+make desktop-logs        # tail the serial log interactively
+make desktop-attach      # attach to the tmux session
 make desktop-screenshot  # save a framebuffer screenshot from the detached run
 make desktop-stop        # stop the detached tmux session
 make desktop-validate    # headless validation using injected marker jobs
@@ -57,12 +60,27 @@ The harness script is:
 
 Current defaults:
 
-- graphical run image: `/workspace/tmp/caseFullDesktop_icu74meta.boot.img`
-- validation image: `/workspace/tmp/caseFullDesktop_icu74meta.boot.img`
+- built desktop image: `/workspace/tmp/haiku-build/validated/haiku-arm64-icu74-desktop.boot.img`
+- graphical run image: same as above
+- validation image: same as above
 
-`make desktop-run` writes a stable tmux/state/monitor setup under:
+`make desktop-image` assembles the reproducible local ICU74 desktop image from the
+nightly base image plus generated runtime/package artifacts.
+
+`make desktop-run` is the primary async path. It returns immediately and writes a
+stable tmux/state/monitor setup under:
 
 - `/workspace/tmp/haiku-boot-harness/`
+
+For interactive follow-up after `make desktop-run`:
+
+- `make desktop-status`
+- `make desktop-logs`
+- `make desktop-attach`
+- `make desktop-screenshot`
+
+`make desktop-capture` still exists as a blocking convenience target, but it is not
+required for the normal async workflow.
 
 The validation mode boots headlessly, injects a temporary `user_launch` wrapper into a
 writable copy of the image, captures the serial log, and verifies launch markers for:
