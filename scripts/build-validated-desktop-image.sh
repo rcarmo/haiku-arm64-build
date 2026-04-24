@@ -161,6 +161,42 @@ create_haiku_package() {
     "$stage_dir/lib/libbluetooth.so" \
     "$stage_dir/lib/libmidi2.so"
 
+  python3 - "$stage_dir" <<'PY'
+from pathlib import Path
+import sys
+stage = Path(sys.argv[1])
+
+def remove_named_blocks(path, headers):
+    lines = path.read_text().splitlines()
+    out = []
+    i = 0
+    while i < len(lines):
+        stripped = lines[i].strip()
+        if any(stripped == header for header in headers):
+            depth = lines[i].count('{') - lines[i].count('}')
+            i += 1
+            while i < len(lines):
+                depth += lines[i].count('{') - lines[i].count('}')
+                if depth <= 0:
+                    i += 1
+                    break
+                i += 1
+            continue
+        out.append(lines[i])
+        i += 1
+    path.write_text('\n'.join(out) + '\n')
+
+remove_named_blocks(stage / 'data/launch/system', {
+    'service x-vnd.Haiku-media_server {',
+    'service x-vnd.Haiku-midi_server {',
+    'service x-vnd.Be-PSRV {',
+})
+remove_named_blocks(stage / 'data/user_launch/user', {
+    'job x-vnd.Haiku-LaunchBox {',
+    'service x-vnd.Be-POST {',
+})
+PY
+
   cp "$DIRECT_HAIKU_PACKAGE_INFO" "$package_info_copy"
   python3 - "$package_info_copy" <<'PY'
 from pathlib import Path
@@ -175,6 +211,7 @@ remove = {
     'cmd:gunzip',
     'cmd:tar',
     'cmd:unzip',
+    'lib:libexpat',
 }
 lines = p.read_text().splitlines()
 filtered = [line for line in lines if line.strip() not in remove]

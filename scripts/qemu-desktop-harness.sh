@@ -276,55 +276,57 @@ sync_partition_back_to_work_image() {
   dd if="$PART_IMAGE" of="$WORK_IMAGE" bs=512 seek=65540 conv=notrunc status=none
 }
 
+guest_path_to_bfs_path() {
+  local guest_path=$1
+  case "$guest_path" in
+    /boot/*)
+      printf '%s/myfs/%s\n' "$MOUNT_POINT" "${guest_path#/boot/}"
+      ;;
+    *)
+      printf '%s/myfs%s\n' "$MOUNT_POINT" "$guest_path"
+      ;;
+  esac
+}
+
 inject_marker_user_launch() {
   local user_launch_file="$PREFIX.user_launch"
   cat >"$user_launch_file" <<'EOF'
-service x-vnd.Haiku-app_server {
+service x-vnd.Harness-app_server {
 	env /system/boot/SetupEnvironment
-	launch /system/servers/app_server
+	launch /bin/sh -c 'echo app_server >/boot/home/config/settings/marker-app_server-launch; sync; exec /system/servers/app_server'
 }
 
-target desktop {
+service x-vnd.Harness-tracker {
 	env /system/boot/SetupEnvironment
+	launch /bin/sh -c 'echo tracker >/boot/home/config/settings/marker-tracker-launch; sync; exec /system/Tracker /boot/home'
+	legacy
+	on initial_volumes_mounted
+}
 
-	service x-vnd.Be-TRAK {
-		launch /system/Tracker
-		legacy
-		on initial_volumes_mounted
-	}
+service x-vnd.Harness-deskbar {
+	env /system/boot/SetupEnvironment
+	launch /bin/sh -c 'echo deskbar >/boot/home/config/settings/marker-deskbar-launch; sync; exec /system/Deskbar'
+	on initial_volumes_mounted
+}
 
-	service x-vnd.Be-TSKB {
-		launch /bin/sh -c 'echo deskbar >/boot/home/config/settings/marker-deskbar-launch; sync; exec /system/Deskbar'
-		on initial_volumes_mounted
-	}
-
-	job open-home-window {
-		launch /system/Tracker /boot/home
-		requires x-vnd.Be-TRAK
-		on initial_volumes_mounted
-	}
-
-	job harness-marker-app_server {
-		launch /bin/sh -c 'echo app_server >/boot/home/config/settings/marker-app_server-launch; sync'
-		requires x-vnd.Haiku-app_server
-	}
-
-	job harness-marker-tracker {
-		launch /bin/sh -c 'echo tracker >/boot/home/config/settings/marker-tracker-launch; sync'
-		requires x-vnd.Be-TRAK
-	}
+target harness-desktop {
+	x-vnd.Harness-app_server
+	x-vnd.Harness-tracker
+	x-vnd.Harness-deskbar
 }
 
 run {
-	desktop
+	harness-desktop
 }
 EOF
 
   mount_bfs_partition
   mkdir -p "$MOUNT_POINT/myfs/system/settings/user_launch" "$MOUNT_POINT/myfs/home/config/settings"
   cp "$user_launch_file" "$MOUNT_POINT/myfs/system/settings/user_launch/user"
+  local marker host_path
   for marker in "${FILE_MARKERS[@]}"; do
-    rm -f "$MOUNT_POINT/myfs${marker}"
+    host_path=$(guest_path_to_bfs_path "$marker")
+    rm -f "$host_path"
   done
   sync
   unmount_bfs_partition
@@ -376,9 +378,10 @@ run_tmux() {
 
 markers_present() {
   mount_bfs_partition
-  local marker missing=0
+  local marker host_path missing=0
   for marker in "${FILE_MARKERS[@]}"; do
-    if [[ ! -f "$MOUNT_POINT/myfs${marker}" ]]; then
+    host_path=$(guest_path_to_bfs_path "$marker")
+    if [[ ! -f "$host_path" ]]; then
       missing=1
     fi
   done
@@ -441,8 +444,10 @@ validate_headless() {
 
   local missing=0 marker
   mount_bfs_partition
+  local host_path
   for marker in "${FILE_MARKERS[@]}"; do
-    if [[ -f "$MOUNT_POINT/myfs${marker}" ]]; then
+    host_path=$(guest_path_to_bfs_path "$marker")
+    if [[ -f "$host_path" ]]; then
       echo "marker: OK  $marker"
     else
       echo "marker: MISS $marker"
