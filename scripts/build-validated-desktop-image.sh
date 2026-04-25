@@ -14,6 +14,8 @@ DIRECT_HAIKU_HPKG=${DIRECT_HAIKU_HPKG:-$BUILD_DIR/objects/haiku/arm64/packaging/
 DIRECT_HAIKU_CONTENTS_DIR=${DIRECT_HAIKU_CONTENTS_DIR:-$BUILD_DIR/objects/haiku/arm64/packaging/packages_build/regular/hpkg_-haiku.hpkg/contents}
 DIRECT_HAIKU_PACKAGE_INFO=${DIRECT_HAIKU_PACKAGE_INFO:-$BUILD_DIR/objects/haiku/arm64/packaging/packages_build/regular/hpkg_-haiku.hpkg/haiku-package-info}
 EXPAT_HPKG=${EXPAT_HPKG:-$BUILD_DIR/objects/haiku/arm64/packaging/repositories/HaikuPortsCross-build/packages/expat_bootstrap-2.5.0-1-arm64.hpkg}
+BASH_HPKG=${BASH_HPKG:-$REPACKED_DIR/bash-4.4.023-1-arm64.hpkg}
+COREUTILS_HPKG=${COREUTILS_HPKG:-$REPACKED_DIR/coreutils-8.22-1-arm64.hpkg}
 OUTPUT_DIR=${OUTPUT_DIR:-/workspace/tmp/haiku-build/validated}
 OUTPUT_IMAGE=${OUTPUT_IMAGE:-$OUTPUT_DIR/haiku-arm64-icu74-desktop.boot.img}
 OUTPUT_HAIKU_HPKG=${OUTPUT_HAIKU_HPKG:-$OUTPUT_DIR/haiku-direct-icu74.hpkg}
@@ -39,10 +41,10 @@ usage() {
 Build a reproducible validated ICU74 desktop boot image for early QEMU testing.
 
 Environment overrides:
-  BASE_IMAGE, REPACKED_DIR, DIRECT_HAIKU_HPKG, DIRECT_HAIKU_CONTENTS_DIR,
-  DIRECT_HAIKU_PACKAGE_INFO, EXPAT_HPKG, OUTPUT_DIR, OUTPUT_IMAGE,
-  OUTPUT_HAIKU_HPKG, OUTPUT_COMPAT_HPKG, BUILD_DIR, PACKAGE_TOOL,
-  BFS_SHELL, BFS_FUSE, SYSTEM_PARTITION_MIB
+  BASE_IMAGE, DIRECT_HAIKU_HPKG, DIRECT_HAIKU_CONTENTS_DIR,
+  DIRECT_HAIKU_PACKAGE_INFO, EXPAT_HPKG, BASH_HPKG, COREUTILS_HPKG,
+  OUTPUT_DIR, OUTPUT_IMAGE, OUTPUT_HAIKU_HPKG, OUTPUT_COMPAT_HPKG,
+  BUILD_DIR, PACKAGE_TOOL, BFS_SHELL, BFS_FUSE, SYSTEM_PARTITION_MIB
 EOF
 }
 
@@ -83,8 +85,8 @@ require_file "$DIRECT_HAIKU_HPKG"
 require_file "$DIRECT_HAIKU_PACKAGE_INFO"
 [[ -d "$DIRECT_HAIKU_CONTENTS_DIR" ]] || { echo "missing dir: $DIRECT_HAIKU_CONTENTS_DIR" >&2; exit 1; }
 require_file "$EXPAT_HPKG"
-require_file "$REPACKED_DIR/bash-4.4.023-1-arm64.hpkg"
-require_file "$REPACKED_DIR/coreutils-8.22-1-arm64.hpkg"
+require_file "$BASH_HPKG"
+require_file "$COREUTILS_HPKG"
 
 create_compat_package() {
   rm -rf "$COMPAT_STAGE"
@@ -255,13 +257,15 @@ PY
         "$pkgdir/zlib-1.2.13-1-arm64.hpkg" \
         "$pkgdir/expat_bootstrap-2.5.0-1-arm64.hpkg" \
         "$pkgdir/bash-4.4.023-1-arm64.hpkg" \
-        "$pkgdir/coreutils-8.22-1-arm64.hpkg"
+        "$pkgdir/bash_bootstrap-4.4.023-1-arm64.hpkg" \
+        "$pkgdir/coreutils-8.22-1-arm64.hpkg" \
+        "$pkgdir/coreutils_bootstrap-9.9-1-arm64.hpkg"
 
   cp "$OUTPUT_HAIKU_HPKG" "$pkgdir/$(basename "$OUTPUT_HAIKU_HPKG")"
   cp "$OUTPUT_COMPAT_HPKG" "$pkgdir/compat_bootstrap_runtime-1-2-arm64.hpkg"
   cp "$EXPAT_HPKG" "$pkgdir/"
-  cp "$REPACKED_DIR/bash-4.4.023-1-arm64.hpkg" "$pkgdir/"
-  cp "$REPACKED_DIR/coreutils-8.22-1-arm64.hpkg" "$pkgdir/"
+  cp "$BASH_HPKG" "$pkgdir/"
+  cp "$COREUTILS_HPKG" "$pkgdir/"
 
   find "$MOUNT_POINT/myfs/system/non-packaged/lib" -maxdepth 1 -type f \
     \( -name 'libstdc++.so*' -o -name 'libgcc_s.so*' -o -name 'libicu*.so*' -o -name 'libzstd.so*' -o -name 'libz.so*' \) \

@@ -416,7 +416,11 @@ markers_present() {
 }
 
 crash_detected() {
-  [[ -f "$SERIAL_LOG" ]] && strings "$SERIAL_LOG" | rg -q 'debug_server: Thread|Segment violation|consoled: error'
+  local logs=()
+  [[ -f "$SERIAL_LOG" ]] && logs+=("$SERIAL_LOG")
+  [[ -f "$LOG_FILE" ]] && logs+=("$LOG_FILE")
+  ((${#logs[@]} > 0)) || return 1
+  strings "${logs[@]}" | rg -q 'debug_server: Thread|Segment violation|consoled: error|DEBUGGER: double free'
 }
 
 desktop_ready() {
