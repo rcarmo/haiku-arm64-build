@@ -6,6 +6,7 @@ REPO_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)
 HAIKU_DIR=${HAIKU_DIR:-$REPO_DIR/haiku}
 BUILD_DIR=${BUILD_DIR:-$HAIKU_DIR/generated.arm64}
 PACKAGE_TOOL=${PACKAGE_TOOL:-$BUILD_DIR/objects/linux/arm64/release/tools/package/package}
+BFS_SHELL=${BFS_SHELL:-$BUILD_DIR/objects/linux/arm64/release/tools/bfs_shell/bfs_shell}
 BFS_FUSE=${BFS_FUSE:-/workspace/tmp/bfs_fuse}
 BASE_IMAGE=${BASE_IMAGE:-/workspace/tmp/haiku-nightly-arm64/haiku-master-hrev59637-arm64-mmc.image}
 REPACKED_DIR=${REPACKED_DIR:-/workspace/tmp/repacked-hpkg}
@@ -18,6 +19,15 @@ OUTPUT_IMAGE=${OUTPUT_IMAGE:-$OUTPUT_DIR/haiku-arm64-icu74-desktop.boot.img}
 OUTPUT_HAIKU_HPKG=${OUTPUT_HAIKU_HPKG:-$OUTPUT_DIR/haiku-direct-icu74.hpkg}
 OUTPUT_COMPAT_HPKG=${OUTPUT_COMPAT_HPKG:-$OUTPUT_DIR/compat_bootstrap_runtime-1-2-arm64.hpkg}
 MOUNT_POINT=${MOUNT_POINT:-/tmp/haiku-bfs-mount}
+OLD_MOUNT_POINT=${OLD_MOUNT_POINT:-/tmp/haiku-bfs-mount-old}
+SYSTEM_PARTITION_MIB=${SYSTEM_PARTITION_MIB:-512}
+SECTOR_SIZE=512
+EFI_PARTITION_START=4
+EFI_PARTITION_SECTORS=65536
+SYSTEM_PARTITION_START=65540
+BASE_SYSTEM_PARTITION_SECTORS=614400
+SYSTEM_PARTITION_SECTORS=$((SYSTEM_PARTITION_MIB * 2048))
+OUTPUT_IMAGE_SECTORS=$((SYSTEM_PARTITION_START + SYSTEM_PARTITION_SECTORS))
 STAMP=$(date +%Y%m%d-%H%M%S)
 WORK_DIR="$OUTPUT_DIR/work-$STAMP"
 PART_IMAGE="$WORK_DIR/system.part.img"
@@ -31,7 +41,8 @@ Build a reproducible validated ICU74 desktop boot image for early QEMU testing.
 Environment overrides:
   BASE_IMAGE, REPACKED_DIR, DIRECT_HAIKU_HPKG, DIRECT_HAIKU_CONTENTS_DIR,
   DIRECT_HAIKU_PACKAGE_INFO, EXPAT_HPKG, OUTPUT_DIR, OUTPUT_IMAGE,
-  OUTPUT_HAIKU_HPKG, OUTPUT_COMPAT_HPKG, BUILD_DIR, PACKAGE_TOOL, BFS_FUSE
+  OUTPUT_HAIKU_HPKG, OUTPUT_COMPAT_HPKG, BUILD_DIR, PACKAGE_TOOL,
+  BFS_SHELL, BFS_FUSE, SYSTEM_PARTITION_MIB
 EOF
 }
 
@@ -45,8 +56,14 @@ cleanup() {
   if mountpoint -q "$MOUNT_POINT" 2>/dev/null; then
     fusermount -u "$MOUNT_POINT" >/dev/null 2>&1 || true
   fi
+  if mountpoint -q "$OLD_MOUNT_POINT" 2>/dev/null; then
+    fusermount -u "$OLD_MOUNT_POINT" >/dev/null 2>&1 || true
+  fi
   if [[ -n "${BFS_PID:-}" ]]; then
     wait "$BFS_PID" >/dev/null 2>&1 || true
+  fi
+  if [[ -n "${OLD_BFS_PID:-}" ]]; then
+    wait "$OLD_BFS_PID" >/dev/null 2>&1 || true
   fi
 }
 trap cleanup EXIT
@@ -59,6 +76,7 @@ fi
 mkdir -p "$OUTPUT_DIR" "$WORK_DIR"
 
 require_file "$PACKAGE_TOOL"
+require_file "$BFS_SHELL"
 require_file "$BFS_FUSE"
 require_file "$BASE_IMAGE"
 require_file "$DIRECT_HAIKU_HPKG"
@@ -122,39 +140,6 @@ create_haiku_package() {
   mkdir -p "$stage_dir"
   cp -a "$DIRECT_HAIKU_CONTENTS_DIR/." "$stage_dir/"
 
-  # Keep the direct package close to the previously validated ICU74 desktop lane
-  # until the fuller regular package is boot-stable on arm64.
-  rm -f \
-    "$stage_dir/servers/bluetooth_server" \
-    "$stage_dir/servers/nfs4_idmapper_server" \
-    "$stage_dir/apps/ActivityMonitor" \
-    "$stage_dir/apps/AutoRaise" \
-    "$stage_dir/apps/CodyCam" \
-    "$stage_dir/apps/HaikuDepot" \
-    "$stage_dir/apps/Icon-O-Matic" \
-    "$stage_dir/apps/LegacyPackageInstaller" \
-    "$stage_dir/apps/Magnify" \
-    "$stage_dir/apps/Mail" \
-    "$stage_dir/apps/MediaConverter" \
-    "$stage_dir/apps/MediaPlayer" \
-    "$stage_dir/apps/MidiPlayer" \
-    "$stage_dir/apps/People" \
-    "$stage_dir/apps/PoorMan" \
-    "$stage_dir/apps/PowerStatus" \
-    "$stage_dir/apps/RemoteDesktop" \
-    "$stage_dir/apps/Screenshot" \
-    "$stage_dir/apps/SerialConnect" \
-    "$stage_dir/apps/SoftwareUpdater" \
-    "$stage_dir/apps/SoundRecorder" \
-    "$stage_dir/preferences/Bluetooth" \
-    "$stage_dir/preferences/DataTranslations" \
-    "$stage_dir/preferences/E-mail" \
-    "$stage_dir/preferences/Printers" \
-    "$stage_dir/preferences/Repositories" \
-    "$stage_dir/preferences/ScreenSaver" \
-    "$stage_dir/preferences/Sounds" \
-    "$stage_dir/lib/libbluetooth.so"
-
   cp "$DIRECT_HAIKU_PACKAGE_INFO" "$package_info_copy"
   python3 - "$package_info_copy" <<'PY'
 from pathlib import Path
@@ -178,13 +163,81 @@ PY
 }
 
 assemble_image() {
-  cp "$BASE_IMAGE" "$OUTPUT_IMAGE"
-  dd if="$OUTPUT_IMAGE" of="$PART_IMAGE" bs=512 skip=65540 count=614400 status=none
+  local old_part_image="$WORK_DIR/system.base.part.img"
+  local partition_table="$WORK_DIR/partition-table.sfdisk"
 
+  cp "$BASE_IMAGE" "$OUTPUT_IMAGE"
+  truncate -s $((OUTPUT_IMAGE_SECTORS * SECTOR_SIZE)) "$OUTPUT_IMAGE"
+
+  cat > "$partition_table" <<EOF
+label: dos
+label-id: 0x00000000
+device: $OUTPUT_IMAGE
+unit: sectors
+sector-size: $SECTOR_SIZE
+
+$OUTPUT_IMAGE"1 : start=$EFI_PARTITION_START, size=$EFI_PARTITION_SECTORS, type=ef
+$OUTPUT_IMAGE"2 : start=$SYSTEM_PARTITION_START, size=$SYSTEM_PARTITION_SECTORS, type=eb
+EOF
+  python3 - "$partition_table" "$OUTPUT_IMAGE" "$SYSTEM_PARTITION_START" "$SYSTEM_PARTITION_SECTORS" <<'PY'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+image = sys.argv[2]
+start = sys.argv[3]
+size = sys.argv[4]
+path.write_text(
+    f"label: dos\n"
+    f"label-id: 0x00000000\n"
+    f"device: {image}\n"
+    f"unit: sectors\n"
+    f"sector-size: 512\n\n"
+    f"{image}1 : start=4, size=65536, type=ef\n"
+    f"{image}2 : start={start}, size={size}, type=eb\n"
+)
+PY
+  sfdisk --force "$OUTPUT_IMAGE" < "$partition_table" >/dev/null
+
+  dd if="$BASE_IMAGE" of="$old_part_image" bs=$SECTOR_SIZE \
+    skip=$SYSTEM_PARTITION_START count=$BASE_SYSTEM_PARTITION_SECTORS status=none
+  truncate -s $((SYSTEM_PARTITION_SECTORS * SECTOR_SIZE)) "$PART_IMAGE"
+
+  (
+    cd "$BUILD_DIR"
+    export LD_LIBRARY_PATH="$BUILD_DIR/objects/linux/lib"
+    "$BFS_SHELL" --initialize "$PART_IMAGE" Haiku >/dev/null
+  )
+
+  sudo umount -l "$OLD_MOUNT_POINT" >/dev/null 2>&1 || true
   sudo umount -l "$MOUNT_POINT" >/dev/null 2>&1 || true
+  sudo rm -rf "$OLD_MOUNT_POINT" "$MOUNT_POINT"
+  mkdir -p "$OLD_MOUNT_POINT" "$MOUNT_POINT"
+
+  (
+    cd "$BUILD_DIR"
+    export LD_LIBRARY_PATH="$BUILD_DIR/objects/linux/lib"
+    "$BFS_FUSE" "$old_part_image" "$OLD_MOUNT_POINT" >"$WORK_DIR/bfs-fuse-old.log" 2>&1
+  ) &
+  OLD_BFS_PID=$!
+  (
+    cd "$BUILD_DIR"
+    export LD_LIBRARY_PATH="$BUILD_DIR/objects/linux/lib"
+    "$BFS_FUSE" "$PART_IMAGE" "$MOUNT_POINT" >"$WORK_DIR/bfs-fuse.log" 2>&1
+  ) &
+  BFS_PID=$!
+  sleep 2
+
+  cp -a --no-preserve=timestamps "$OLD_MOUNT_POINT/myfs/." "$MOUNT_POINT/myfs/"
+  sync
+  fusermount -u "$OLD_MOUNT_POINT" >/dev/null 2>&1 || true
+  wait "$OLD_BFS_PID" || true
+  OLD_BFS_PID=
+  fusermount -u "$MOUNT_POINT" >/dev/null 2>&1 || true
+  wait "$BFS_PID" || true
+  BFS_PID=
+
   sudo rm -rf "$MOUNT_POINT"
   mkdir -p "$MOUNT_POINT"
-
   (
     cd "$BUILD_DIR"
     export LD_LIBRARY_PATH="$BUILD_DIR/objects/linux/lib"
@@ -219,7 +272,8 @@ assemble_image() {
   wait "$BFS_PID" || true
   BFS_PID=
 
-  dd if="$PART_IMAGE" of="$OUTPUT_IMAGE" bs=512 seek=65540 conv=notrunc status=none
+  dd if="$PART_IMAGE" of="$OUTPUT_IMAGE" bs=$SECTOR_SIZE \
+    seek=$SYSTEM_PARTITION_START conv=notrunc status=none
 }
 
 echo "== building compat runtime package =="

@@ -205,6 +205,7 @@ require_file "$IMAGE"
 require_file "$QEMU_EFI"
 require_exe "$QEMU_BIN"
 require_exe tmux
+require_exe sfdisk
 
 STAMP=$(date +%Y%m%d-%H%M%S)
 BASENAME=$(basename "$IMAGE" .img)
@@ -218,6 +219,29 @@ TMUX_SESSION=${TMUX_SESSION:-haiku-desktop-$STAMP}
 SCREENSHOT_OUT=${SCREENSHOT_OUT:-$PREFIX.ppm}
 
 cp --reflink=auto "$IMAGE" "$WORK_IMAGE"
+
+load_system_partition_geometry() {
+  local image=$1
+  local geometry
+  geometry=$(sfdisk -d "$image" | awk -F'[ ,=]+' '
+    / : start=/ {
+      n++
+      if (n == 2) {
+        for (i = 1; i <= NF; i++) {
+          if ($i == "start") start = $(i + 1)
+          else if ($i == "size") size = $(i + 1)
+        }
+        print start " " size
+        exit
+      }
+    }
+  ')
+  [[ -n "$geometry" ]] || die "failed to determine system partition geometry for $image"
+  PARTITION_START_SECTORS=${geometry%% *}
+  PARTITION_SIZE_SECTORS=${geometry##* }
+}
+
+load_system_partition_geometry "$WORK_IMAGE"
 
 echo "mode:         $MODE"
 echo "image:        $IMAGE"
@@ -246,7 +270,8 @@ mount_bfs_partition() {
 
   PART_IMAGE="$PREFIX.part.img"
   rm -f "$PART_IMAGE"
-  dd if="$WORK_IMAGE" of="$PART_IMAGE" bs=512 skip=65540 count=614400 status=none
+  dd if="$WORK_IMAGE" of="$PART_IMAGE" bs=512 \
+    skip="$PARTITION_START_SECTORS" count="$PARTITION_SIZE_SECTORS" status=none
 
   sudo umount -l "$MOUNT_POINT" >/dev/null 2>&1 || true
   sudo rm -rf "$MOUNT_POINT"
@@ -273,7 +298,8 @@ unmount_bfs_partition() {
 
 sync_partition_back_to_work_image() {
   [[ -n "${PART_IMAGE:-}" && -f "$PART_IMAGE" ]] || die "missing partition image to sync back"
-  dd if="$PART_IMAGE" of="$WORK_IMAGE" bs=512 seek=65540 conv=notrunc status=none
+  dd if="$PART_IMAGE" of="$WORK_IMAGE" bs=512 \
+    seek="$PARTITION_START_SECTORS" conv=notrunc status=none
 }
 
 guest_path_to_bfs_path() {
