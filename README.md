@@ -4,17 +4,20 @@
 
 Reproducible build setup for Haiku OS ARM64 on Orange Pi 6 Plus.
 
-## Status: Boots to Desktop in the Validated ICU74 Lane (2026-04-23)
+## Status: Boots to Desktop from the Full Direct Package Lane (2026-04-25)
 
-Haiku ARM64 now **boots to a desktop session in QEMU** in the validated ICU74 lane.
-The kernel loads, BFS mounts, `launch_daemon` starts, and the desktop user-session
+Haiku ARM64 now **boots to a desktop session in QEMU** from the validated
+full direct-package lane. The kernel loads, BFS mounts, `launch_daemon` starts,
+`package_daemon` reports `/boot/system` consistent, and the desktop user-session
 comes up far enough to launch `app_server`, `Tracker`, and `Deskbar`.
 
 ![QEMU desktop capture with Tracker visible](docs/haiku-desktop-tracker-qemu-2026-04-23.png)
 
-_This screenshot shows the current validated boot lane with Tracker visible. This is
-still a local, curated ICU74 package set rather than a clean upstream-quality image,
-but it is now accurate to say the project boots to desktop in this lane._
+_This screenshot shows the current validated boot lane with Tracker visible. The
+current image now uses the full direct `haiku.hpkg` package on a grown system
+partition, but it still relies on compatibility/runtime shims (`compat_bootstrap_runtime`,
+`expat_bootstrap`, and repacked `bash`/`coreutils`) rather than a fully stock
+upstream package set._
 
 Directly validated in-guest:
 
@@ -23,7 +26,7 @@ Directly validated in-guest:
 - `app_server` launches
 - `Tracker` launches
 - `Deskbar` launches
-- `package_daemon` reports `/boot/system` consistent with the current ICU74 metadata-fixed test packages
+- `package_daemon` reports `/boot/system` consistent with the current direct-package test image
 
 Confirmed causes of prior boot failures, in resolution order:
 
@@ -69,11 +72,18 @@ The harness script is:
 Current defaults:
 
 - built desktop image: `/workspace/tmp/haiku-build/validated/haiku-arm64-icu74-desktop.boot.img`
+- direct package: `/workspace/tmp/haiku-build/validated/haiku-direct-icu74.hpkg`
+- compat package: `/workspace/tmp/haiku-build/validated/compat_bootstrap_runtime-1-2-arm64.hpkg`
 - graphical run image: same as above
 - validation image: same as above
 
-`make desktop-image` assembles the reproducible local ICU74 desktop image from the
-nightly base image plus generated runtime/package artifacts.
+`make desktop-image` now assembles the reproducible local ICU74 desktop image from:
+
+- the generated direct `haiku.hpkg` contents
+- a grown system partition (currently 512 MiB)
+- `compat_bootstrap_runtime-1-2-arm64.hpkg`
+- `expat_bootstrap-2.5.0-1-arm64.hpkg`
+- repacked `bash` and `coreutils`
 
 `make desktop-run` is the primary async path. It returns immediately and writes a
 stable tmux/state/monitor setup under:
@@ -90,7 +100,7 @@ For interactive follow-up after `make desktop-run`:
 `make desktop-capture` still exists as a blocking convenience target, but it is not
 required for the normal async workflow.
 
-The validation mode boots headlessly, injects a temporary `user_launch` wrapper into a
+The validation mode boots headlessly, injects additive temporary `user_launch` jobs into a
 writable copy of the image, captures the serial log, and verifies launch markers for:
 
 - `app_server`
@@ -126,3 +136,18 @@ qemu-system-aarch64 \
 - `haikuporter/` — Package build tool
 - `haikuports/` — smrobtzz arm64-fixes branch
 - `haikuports.cross/` — smrobtzz update-everything branch
+
+## Current Caveats
+
+The direct package lane now validates end-to-end, but it is not fully de-hacked yet.
+The remaining shims are:
+
+- `compat_bootstrap_runtime-1-2-arm64.hpkg`
+- `expat_bootstrap-2.5.0-1-arm64.hpkg`
+- repacked `bash-4.4.023-1-arm64.hpkg`
+- repacked `coreutils-8.22-1-arm64.hpkg`
+
+The `haiku/` branch `arm64-bootstrap-fixes` also now includes a merge of current
+`upstream/master`, but still keeps an arm64 `HAIKU_NO_DOWNLOADS=1` fallback to
+`HaikuPortsCross` because the newer upstream remote package set is not yet fully
+available in this local workspace.

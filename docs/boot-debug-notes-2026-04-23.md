@@ -542,58 +542,180 @@ Interpretation:
 - The harness is good enough for regression fishing and unattended boot checks.
 - It should not yet be treated as proof that the visual desktop is stable; for now, the direct marker validation remains authoritative.
 
+---
+
+### Case AB: direct `haiku.hpkg` regular-package build path
+
+The regular package path was pushed far enough that:
+
+- `jam -q haiku.hpkg` succeeds in `haiku/generated.arm64`
+- the regular package staging directory is populated with a real `contents/` tree
+- the generated direct package contains the desktop payload (`app_server`, `Tracker`, `Deskbar`, launch data, ICU addon, media/game/screensaver libs)
+
+Interpretation:
+
+- The packaging problem is no longer blocked at Jam/package-generation level.
+- The active issue moved from “can we build the direct package?” to “can we boot it cleanly?”
+
+---
+
+### Case AC: first-boot crash moved into package composition
+
+Once the direct package could be assembled into an image, the next failure was no longer
+`packagefs` or missing content but an early userspace crash during `package_daemon` first-boot processing:
+
+- `DEBUGGER: double free ...`
+- `consoled: error -4 starting console`
+
+Targeted tests showed that replacing the image’s packaged:
+
+- `bash-4.4.023-1-arm64.hpkg`
+- `coreutils-8.22-1-arm64.hpkg`
+
+with the known-good repacked variants removed that immediate crash.
+
+Interpretation:
+
+- The full packaging cycle mattered, not just the main `haiku` package.
+- The direct package lane became viable once the surrounding package set was also made boot-stable.
+
+---
+
+### Case AD: additive validation harness fix
+
+The original validation harness had two flaws:
+
+1. it treated marker paths as though `/boot/...` mapped directly into the mounted BFS tree
+2. it replaced too much of the stock user launch behavior when injecting validation jobs
+
+The harness was reworked to:
+
+- inject **additive** jobs under `/boot/system/settings/user_launch/user`
+- use unique harness service names
+- map guest marker paths correctly into the mounted BFS volume
+
+Result:
+
+- the validation pass/fail signal is now trustworthy
+- marker-based validation can prove desktop launch without depending on framebuffer screenshots
+
+---
+
+### Case AE: restore direct-package service clusters
+
+The direct package lane was then cleaned up by reintroducing previously trimmed clusters one at a time and revalidating each:
+
+- `LaunchBox` + `mail_daemon`
+- `media_server` + `media_addon_server`
+- `midi_server` + `libmidi2.so`
+- `print_server` + `print_addon_server`
+
+Additionally:
+
+- `expat_bootstrap-2.5.0-1-arm64.hpkg` was added to the image package set
+- `lib:libexpat` no longer had to be stripped from the generated package-info metadata
+
+Result:
+
+- each cluster above revalidated successfully in the direct-package desktop lane
+
+Interpretation:
+
+- the earlier trimmed subset was not the only viable configuration
+- a much fuller direct package set can boot, provided the image has enough room and the package set remains solver-consistent
+
+---
+
+### Case AF: grow the system partition and validate the full direct package
+
+The remaining blocker after service-cluster restoration was image capacity:
+
+- the 300 MiB system partition did not have enough free space to hold the full direct package plus the surrounding runtime/support packages
+
+`scripts/build-validated-desktop-image.sh` was updated to:
+
+- grow the system BFS partition from 300 MiB to 512 MiB
+- rewrite the MBR partition table
+- initialize a fresh larger BFS system partition
+- copy the base system partition contents into the larger one
+- install the full direct `haiku` package plus:
+  - `compat_bootstrap_runtime-1-2-arm64.hpkg`
+  - `expat_bootstrap-2.5.0-1-arm64.hpkg`
+  - repacked `bash`
+  - repacked `coreutils`
+
+`scripts/qemu-desktop-harness.sh` was also updated to detect the system partition geometry dynamically instead of assuming the old fixed 300 MiB size.
+
+Result:
+
+- the full direct package now validates end-to-end
+- marker files for `app_server`, `Tracker`, and `Deskbar` are present
+- `package_daemon` reports `/boot/system` consistent
+
+Interpretation:
+
+- The validated lane is now a **full direct-package desktop lane**, not just the earlier curated subset.
+
+---
+
+### Case AG: merge current `upstream/master`
+
+`haiku` branch `arm64-bootstrap-fixes` was merged with current `upstream/master` and pushed.
+
+Notable relevant upstream changes now carried locally:
+
+- `76e076b03b` — `launch_daemon: Rework _GetSourceFileEnvironment logic.`
+- `cb6c752887` — `HaikuPorts/arm64: Update with the newly rebootstrapped packages.`
+
+Local adjustments still required after the merge:
+
+- keep the arm64 `HAIKU_NO_DOWNLOADS=1` fallback to `HaikuPortsCross`
+- keep the older locally available `HaikuPortsCross/arm64` bootstrap package versions
+- keep `zstd_bootstrap` / `texinfo_bootstrap` in the cross source package list so local no-download builds still succeed
+
+Interpretation:
+
+- Upstream progress is now folded into the branch.
+- The branch still builds locally, but newer upstream remote package definitions are not yet directly consumable in this workspace without also updating the local package cache / recipe set.
+
 ## Working conclusions
 
-1. **Do not rely on broad repacks for diagnosis right now**
-   - They trigger packagefs decompression errors and add noise.
-2. **Keep SCSI anti-panic fix**
-   - Prevents dead-end panic loops and allows deeper boot diagnostics.
-3. **The desktop lane now genuinely launches**
-   - With the ICU74-consistent package set, `app_server`, `Tracker`, and `Deskbar`
-     are all directly observed launching in-guest.
-4. **The validated desktop lane is now reproducible from the repo**
-   - `make desktop-image` assembles the current ICU74 desktop test image from the nightly base plus the validated local runtime/package overlays.
-5. **`env /system/boot/SetupEnvironment` crash is an ICU version collision, confirmed**
-   - Presence of both ICU67 (`icu-67.1-2-arm64.hpkg`) and ICU74 (`compat_bootstrap_runtime`)
-     is the direct and sufficient trigger.
-   - With a single consistent ICU version (ICU74 only), `SetupEnvironment` survives
-     including `locale` calls under the full non-safe branch.
-6. **`5059bc3bc8` is a valid correctness fix**
-   - The `_GetSourceFileEnvironment()` tail-length bug is fixed and runtime-tested.
-   - It does not interact with the ICU collision; both fixes are independently necessary.
-7. **Package metadata consistency matters, not just file presence**
-   - A runtime bundle without matching `provides` metadata still leaves `package_daemon`
-     reporting an inconsistent volume.
-   - Updating both runtime package `provides` and `haiku` ICU requirements was necessary
-     for a clean desktop-lane validation.
-8. **TLSDESC relocation support (`daa993f414`) is committed but not yet binary-verified**
-   - `runtime_loader` rebuild is blocked by the bootstrap toolchain header gap.
-   - Verification should be done once the full build chain can be assembled.
+1. **The direct regular package path is now real**
+   - `jam -q haiku.hpkg` succeeds and produces a desktop-capable direct package.
+2. **The validated lane now covers the full packaging cycle**
+   - package build → image assembly → QEMU boot validation all work from the direct package path.
+3. **The validated desktop lane is now a full direct-package lane**
+   - after growing the system partition, the earlier curated trimming is no longer needed for validation.
+4. **The harness is now authoritative for desktop readiness**
+   - additive injection plus correct marker-path handling makes marker validation trustworthy.
+5. **Package composition still matters outside the main `haiku` package**
+   - `compat_bootstrap_runtime`, `expat_bootstrap`, and repacked `bash`/`coreutils` are still part of the currently validated bootable set.
+6. **`env /system/boot/SetupEnvironment` crash was an ICU version collision**
+   - this remains true and was the key to clearing the old `Thread 51` / `consoled -4` path.
+7. **`5059bc3bc8` and upstream `76e076b03b` are valid correctness fixes in the same area**
+   - the launch-daemon environment parsing bug was real and is now covered by the upstream rework.
+8. **Upstream `haiku` moved in a helpful direction, but local no-download fallback is still needed**
+   - until the newer rebootstrapped package set is also available locally.
 
-## Known recurring missing components in logs
+## Remaining deliberate shims
 
-- `libgame.so` (input_server shortcut catcher)
-- `libscreensaver.so` (input_server screen saver filter)
-- `x-vnd.haiku-media_server` launch target not found in failing path
+The current validated lane still depends on:
 
-These should be validated against the active package set in mounted `/boot/system` during failing boots.
+- `compat_bootstrap_runtime-1-2-arm64.hpkg`
+- `expat_bootstrap-2.5.0-1-arm64.hpkg`
+- repacked `bash-4.4.023-1-arm64.hpkg`
+- repacked `coreutils-8.22-1-arm64.hpkg`
+
+These are no longer emergency diagnosis artifacts; they are the current known-good compatibility set for the direct-package desktop image.
 
 ## Immediate next steps
 
-1. Turn the validated local ICU74 desktop lane into a cleaner packaged solution:
-   either proper ICU74 packages for Haiku ARM64 or a reduced set of local runtime
-   packages with correct metadata and minimal divergence.
-2. Re-enable and validate more of the stock desktop/service graph beyond the
-   current core-launch lane (media stack, input add-ons, mail/network adjuncts).
-3. Improve the detached tmux harness so desktop-readiness detection is more robust
-   than the current combination of serial-log heuristics and framebuffer dumps.
-4. Unblock `runtime_loader` rebuild to verify the TLSDESC implementation
-   (`daa993f414`) in-guest with a real TLS-using shared library.
-5. Reduce remaining boot noise (`activated-packages` warnings, `/etc/shadow`
-   warning) so the log surface is dominated by real blockers rather than image
-   assembly artifacts.
-6. Continue storing per-case logs under `/workspace/tmp/` with stable names for
-   deterministic diffs.
+1. Remove the repacked `bash` / `coreutils` dependency from the validated lane.
+2. Replace `compat_bootstrap_runtime` with cleaner direct/upstream packages where possible.
+3. Replace `expat_bootstrap` with the normal package path instead of the bootstrap package.
+4. Move the 512 MiB system-partition growth into the normal image build flow rather than post-processing the nightly base image.
+5. Re-check stock desktop boot behavior without harness-injected launch jobs, now that the full direct-package lane validates.
+6. Continue tracking upstream arm64 package/repository progress so the local no-download fallback can eventually be retired.
 
 ## Reference log files (session)
 
