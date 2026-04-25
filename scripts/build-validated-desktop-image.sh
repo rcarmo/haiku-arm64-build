@@ -12,6 +12,7 @@ REPACKED_DIR=${REPACKED_DIR:-/workspace/tmp/repacked-hpkg}
 DIRECT_HAIKU_HPKG=${DIRECT_HAIKU_HPKG:-$BUILD_DIR/objects/haiku/arm64/packaging/packages/haiku.hpkg}
 DIRECT_HAIKU_CONTENTS_DIR=${DIRECT_HAIKU_CONTENTS_DIR:-$BUILD_DIR/objects/haiku/arm64/packaging/packages_build/regular/hpkg_-haiku.hpkg/contents}
 DIRECT_HAIKU_PACKAGE_INFO=${DIRECT_HAIKU_PACKAGE_INFO:-$BUILD_DIR/objects/haiku/arm64/packaging/packages_build/regular/hpkg_-haiku.hpkg/haiku-package-info}
+EXPAT_HPKG=${EXPAT_HPKG:-$BUILD_DIR/objects/haiku/arm64/packaging/repositories/HaikuPortsCross-build/packages/expat_bootstrap-2.5.0-1-arm64.hpkg}
 OUTPUT_DIR=${OUTPUT_DIR:-/workspace/tmp/haiku-build/validated}
 OUTPUT_IMAGE=${OUTPUT_IMAGE:-$OUTPUT_DIR/haiku-arm64-icu74-desktop.boot.img}
 OUTPUT_HAIKU_HPKG=${OUTPUT_HAIKU_HPKG:-$OUTPUT_DIR/haiku-direct-icu74.hpkg}
@@ -29,8 +30,8 @@ Build a reproducible validated ICU74 desktop boot image for early QEMU testing.
 
 Environment overrides:
   BASE_IMAGE, REPACKED_DIR, DIRECT_HAIKU_HPKG, DIRECT_HAIKU_CONTENTS_DIR,
-  DIRECT_HAIKU_PACKAGE_INFO, OUTPUT_DIR, OUTPUT_IMAGE, OUTPUT_HAIKU_HPKG,
-  OUTPUT_COMPAT_HPKG, BUILD_DIR, PACKAGE_TOOL, BFS_FUSE
+  DIRECT_HAIKU_PACKAGE_INFO, EXPAT_HPKG, OUTPUT_DIR, OUTPUT_IMAGE,
+  OUTPUT_HAIKU_HPKG, OUTPUT_COMPAT_HPKG, BUILD_DIR, PACKAGE_TOOL, BFS_FUSE
 EOF
 }
 
@@ -63,6 +64,7 @@ require_file "$BASE_IMAGE"
 require_file "$DIRECT_HAIKU_HPKG"
 require_file "$DIRECT_HAIKU_PACKAGE_INFO"
 [[ -d "$DIRECT_HAIKU_CONTENTS_DIR" ]] || { echo "missing dir: $DIRECT_HAIKU_CONTENTS_DIR" >&2; exit 1; }
+require_file "$EXPAT_HPKG"
 require_file "$REPACKED_DIR/bash-4.4.023-1-arm64.hpkg"
 require_file "$REPACKED_DIR/coreutils-8.22-1-arm64.hpkg"
 
@@ -124,19 +126,12 @@ create_haiku_package() {
   # until the fuller regular package is boot-stable on arm64.
   rm -f \
     "$stage_dir/servers/bluetooth_server" \
-    "$stage_dir/servers/mail_daemon" \
-    "$stage_dir/servers/media_addon_server" \
-    "$stage_dir/servers/media_server" \
-    "$stage_dir/servers/midi_server" \
     "$stage_dir/servers/nfs4_idmapper_server" \
-    "$stage_dir/servers/print_addon_server" \
-    "$stage_dir/servers/print_server" \
     "$stage_dir/apps/ActivityMonitor" \
     "$stage_dir/apps/AutoRaise" \
     "$stage_dir/apps/CodyCam" \
     "$stage_dir/apps/HaikuDepot" \
     "$stage_dir/apps/Icon-O-Matic" \
-    "$stage_dir/apps/LaunchBox" \
     "$stage_dir/apps/LegacyPackageInstaller" \
     "$stage_dir/apps/Magnify" \
     "$stage_dir/apps/Mail" \
@@ -158,44 +153,7 @@ create_haiku_package() {
     "$stage_dir/preferences/Repositories" \
     "$stage_dir/preferences/ScreenSaver" \
     "$stage_dir/preferences/Sounds" \
-    "$stage_dir/lib/libbluetooth.so" \
-    "$stage_dir/lib/libmidi2.so"
-
-  python3 - "$stage_dir" <<'PY'
-from pathlib import Path
-import sys
-stage = Path(sys.argv[1])
-
-def remove_named_blocks(path, headers):
-    lines = path.read_text().splitlines()
-    out = []
-    i = 0
-    while i < len(lines):
-        stripped = lines[i].strip()
-        if any(stripped == header for header in headers):
-            depth = lines[i].count('{') - lines[i].count('}')
-            i += 1
-            while i < len(lines):
-                depth += lines[i].count('{') - lines[i].count('}')
-                if depth <= 0:
-                    i += 1
-                    break
-                i += 1
-            continue
-        out.append(lines[i])
-        i += 1
-    path.write_text('\n'.join(out) + '\n')
-
-remove_named_blocks(stage / 'data/launch/system', {
-    'service x-vnd.Haiku-media_server {',
-    'service x-vnd.Haiku-midi_server {',
-    'service x-vnd.Be-PSRV {',
-})
-remove_named_blocks(stage / 'data/user_launch/user', {
-    'job x-vnd.Haiku-LaunchBox {',
-    'service x-vnd.Be-POST {',
-})
-PY
+    "$stage_dir/lib/libbluetooth.so"
 
   cp "$DIRECT_HAIKU_PACKAGE_INFO" "$package_info_copy"
   python3 - "$package_info_copy" <<'PY'
@@ -211,7 +169,6 @@ remove = {
     'cmd:gunzip',
     'cmd:tar',
     'cmd:unzip',
-    'lib:libexpat',
 }
 lines = p.read_text().splitlines()
 filtered = [line for line in lines if line.strip() not in remove]
@@ -243,11 +200,13 @@ assemble_image() {
   rm -f "$pkgdir/gcc_syslibs-13.2.0_2023_08_10-1-arm64.hpkg" \
         "$pkgdir/icu-67.1-2-arm64.hpkg" \
         "$pkgdir/zlib-1.2.13-1-arm64.hpkg" \
+        "$pkgdir/expat_bootstrap-2.5.0-1-arm64.hpkg" \
         "$pkgdir/bash-4.4.023-1-arm64.hpkg" \
         "$pkgdir/coreutils-8.22-1-arm64.hpkg"
 
   cp "$OUTPUT_HAIKU_HPKG" "$pkgdir/$(basename "$OUTPUT_HAIKU_HPKG")"
   cp "$OUTPUT_COMPAT_HPKG" "$pkgdir/compat_bootstrap_runtime-1-2-arm64.hpkg"
+  cp "$EXPAT_HPKG" "$pkgdir/"
   cp "$REPACKED_DIR/bash-4.4.023-1-arm64.hpkg" "$pkgdir/"
   cp "$REPACKED_DIR/coreutils-8.22-1-arm64.hpkg" "$pkgdir/"
 
