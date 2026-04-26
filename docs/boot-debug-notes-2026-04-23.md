@@ -807,8 +807,11 @@ Expected results encoded by the probe:
 - `direct_plus_zstd` → pass-with-issues (`lib:libexpat` still missing)
 - `direct_plus_zstd_expat` → pass
 
-The probe writes per-case validate logs plus machine-readable summaries under
-`/workspace/tmp/haiku-overlay-probe/`.
+The probe writes per-case validate logs plus machine-readable summaries under:
+
+- `/workspace/tmp/haiku-overlay-probe/summary.md`
+- `/workspace/tmp/haiku-overlay-probe/summary.tsv`
+- `/workspace/tmp/haiku-overlay-probe/*.validate.log`
 
 Interpretation:
 
