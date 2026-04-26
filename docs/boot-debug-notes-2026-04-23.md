@@ -678,6 +678,30 @@ Interpretation:
 - Upstream progress is now folded into the branch.
 - The branch still builds locally, but newer upstream remote package definitions are not yet directly consumable in this workspace without also updating the local package cache / recipe set.
 
+---
+
+### Case AH: remove the repacked shell-package dependency
+
+The next cleanup pass re-tested the validated lane with locally built shell packages
+instead of the older repacked ones.
+
+Result:
+
+- `coreutils_bootstrap-9.9-1-arm64.hpkg` validates successfully in place of the repacked `coreutils` package.
+- Raw `bash_bootstrap-4.4.023-1-arm64.hpkg` crashes during package first-boot processing:
+  - `Doing first boot processing #0 for package bash_bootstrap-4.4.023-1-arm64.hpkg.`
+  - `DEBUGGER: double free ...`
+  - `consoled: error -4 starting console.`
+- Metadata/payload diffing showed the critical behavioral delta versus the known-good repacked `bash` package was a `global-writable-files { "settings/bashrc" keep-old }` entry.
+- Repacking the built `bash_bootstrap` package *without changing its payload*, but removing only that writable-file metadata block, validates successfully.
+
+Interpretation:
+
+- repacked `coreutils` is no longer needed
+- repacked `bash` is also no longer needed as a payload workaround
+- the remaining issue was package metadata: first-boot writable-file processing for `bash_bootstrap` trips the arm64 desktop-validation lane, while the actual shell binaries are fine
+- the local fix belongs in metadata sanitization, not in another broad package/content repack
+
 ## Working conclusions
 
 1. **The direct regular package path is now real**
@@ -689,7 +713,7 @@ Interpretation:
 4. **The harness is now authoritative for desktop readiness**
    - additive injection plus correct marker-path handling makes marker validation trustworthy.
 5. **Package composition still matters outside the main `haiku` package**
-   - `compat_bootstrap_runtime`, `expat_bootstrap`, and repacked `bash`/`coreutils` are still part of the currently validated bootable set.
+   - `compat_bootstrap_runtime` and `expat_bootstrap` are still part of the currently validated bootable set, and `bash_bootstrap` needs metadata sanitization to avoid first-boot writable-file processing on arm64.
 6. **`env /system/boot/SetupEnvironment` crash was an ICU version collision**
    - this remains true and was the key to clearing the old `Thread 51` / `consoled -4` path.
 7. **`5059bc3bc8` and upstream `76e076b03b` are valid correctness fixes in the same area**
@@ -703,14 +727,13 @@ The current validated lane still depends on:
 
 - `compat_bootstrap_runtime-1-2-arm64.hpkg`
 - `expat_bootstrap-2.5.0-1-arm64.hpkg`
-- repacked `bash-4.4.023-1-arm64.hpkg`
-- repacked `coreutils-8.22-1-arm64.hpkg`
+- a local metadata-only `bash_bootstrap` sanitization step (drop `GLOBAL_WRITABLE_FILES`)
 
 These are no longer emergency diagnosis artifacts; they are the current known-good compatibility set for the direct-package desktop image.
 
 ## Immediate next steps
 
-1. Remove the repacked `bash` / `coreutils` dependency from the validated lane.
+1. Replace the local `bash_bootstrap` metadata sanitization step with a cleaner upstreamable fix once the underlying first-boot processing issue is understood.
 2. Replace `compat_bootstrap_runtime` with cleaner direct/upstream packages where possible.
 3. Replace `expat_bootstrap` with the normal package path instead of the bootstrap package.
 4. Move the 512 MiB system-partition growth into the normal image build flow rather than post-processing the nightly base image.

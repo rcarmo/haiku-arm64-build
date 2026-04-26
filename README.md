@@ -15,9 +15,9 @@ comes up far enough to launch `app_server`, `Tracker`, and `Deskbar`.
 
 _This screenshot shows the current validated boot lane with Tracker visible. The
 current image now uses the full direct `haiku.hpkg` package on a grown system
-partition, but it still relies on compatibility/runtime shims (`compat_bootstrap_runtime`,
-`expat_bootstrap`, and repacked `bash`/`coreutils`) rather than a fully stock
-upstream package set._
+partition. It still relies on `compat_bootstrap_runtime` and `expat_bootstrap`,
+and it still uses the local arm64 `HaikuPortsCross` fallback in no-download
+mode, but it no longer depends on repacked `bash`/`coreutils` packages._
 
 Directly validated in-guest:
 
@@ -83,7 +83,8 @@ Current defaults:
 - a grown system partition (currently 512 MiB)
 - `compat_bootstrap_runtime-1-2-arm64.hpkg`
 - `expat_bootstrap-2.5.0-1-arm64.hpkg`
-- repacked `bash` and `coreutils`
+- `bash_bootstrap-4.4.023-1-arm64.hpkg`
+- `coreutils_bootstrap-9.9-1-arm64.hpkg`
 
 `make desktop-run` is the primary async path. It returns immediately and writes a
 stable tmux/state/monitor setup under:
@@ -140,12 +141,12 @@ qemu-system-aarch64 \
 ## Current Caveats
 
 The direct package lane now validates end-to-end, but it is not fully de-hacked yet.
-The remaining shims are:
+The remaining deliberate shims are:
 
 - `compat_bootstrap_runtime-1-2-arm64.hpkg`
 - `expat_bootstrap-2.5.0-1-arm64.hpkg`
-- repacked `bash-4.4.023-1-arm64.hpkg`
-- repacked `coreutils-8.22-1-arm64.hpkg`
+- a local metadata-only `bash_bootstrap` sanitization step that drops
+  `GLOBAL_WRITABLE_FILES` before image assembly on arm64
 
 The `haiku/` branch `arm64-bootstrap-fixes` also now includes a merge of current
 `upstream/master`, but still keeps an arm64 `HAIKU_NO_DOWNLOADS=1` fallback to
