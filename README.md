@@ -4,7 +4,7 @@
 
 Reproducible build setup for Haiku OS ARM64 on Orange Pi 6 Plus.
 
-## Status: Boots to Desktop from the Full Direct Package Lane (2026-04-25)
+## Status: Boots to Desktop from the Full Direct Package Lane (2026-04-26)
 
 Haiku ARM64 now **boots to a desktop session in QEMU** from the validated
 full direct-package lane. The kernel loads, BFS mounts, `launch_daemon` starts,
@@ -15,7 +15,7 @@ comes up far enough to launch `app_server`, `Tracker`, and `Deskbar`.
 
 _This screenshot shows the current validated boot lane with Tracker visible. The
 current image now uses the full direct `haiku.hpkg` package on a grown system
-partition and now rides on top of the newer hrev59653-style stock arm64
+partition and now rides on top of the newer rebootstrapped stock arm64
 nightly bootstrap package set. The current overlay is down to `expat_bootstrap`
 and `zstd_bootstrap`, while the older `compat_bootstrap_runtime` and repacked
 shell-package workarounds are no longer part of the default validated image._
@@ -46,6 +46,7 @@ Detailed experiment matrix: [`docs/boot-debug-notes-2026-04-23.md`](docs/boot-de
 make deps        # install prerequisites (once)
 make clone       # clone haiku + buildtools repos
 make toolchain   # build cross-compiler (~15 min)
+make nightly-arm64-sync  # fetch latest stock arm64 nightly base image
 make image       # build minimum MMC image (~5 min)
 make test        # QEMU smoke test (30s)
 make desktop-image  # assemble the validated ICU74 desktop test image
@@ -56,7 +57,10 @@ make desktop-image  # assemble the validated ICU74 desktop test image
 For later regression work, the repo now includes a small QEMU desktop harness:
 
 ```sh
+make nightly-arm64-sync  # download latest arm64 nightly MMC image and update symlink
+make stock-validate      # validate the stock nightly image directly
 make desktop-image       # assemble the validated ICU74 desktop boot image
+make desktop-refresh     # sync nightly base, rebuild direct image, validate it
 make desktop-run         # start that image under detached tmux
 make desktop-status      # print session/log/state info and recent serial output
 make desktop-logs        # tail the serial log interactively
@@ -66,13 +70,15 @@ make desktop-stop        # stop the detached tmux session
 make desktop-validate    # headless validation using injected marker jobs
 ```
 
-The harness script is:
+Key automation scripts:
 
+- `scripts/fetch-latest-arm64-nightly.sh`
+- `scripts/build-validated-desktop-image.sh`
 - `scripts/qemu-desktop-harness.sh`
 
 Current defaults:
 
-- base nightly image: `/workspace/tmp/haiku-nightly-arm64/haiku-master-hrev59653-arm64-mmc.image`
+- managed base nightly symlink: `/workspace/tmp/haiku-nightly-arm64/haiku-master-arm64-current-mmc.image`
 - built desktop image: `/workspace/tmp/haiku-build/validated/haiku-arm64-icu74-desktop.boot.img`
 - direct package: `/workspace/tmp/haiku-build/validated/haiku-direct-icu74.hpkg`
 - compat package artifact (legacy fallback only): `/workspace/tmp/haiku-build/validated/compat_bootstrap_runtime-1-2-arm64.hpkg`
@@ -83,7 +89,7 @@ Current defaults:
 
 - the generated direct `haiku.hpkg` contents
 - a grown system partition (currently 512 MiB)
-- the stock hrev59653 arm64 nightly bootstrap package set from the base image
+- the stock rebootstrapped arm64 nightly bootstrap package set from the base image
 - `expat_bootstrap-2.5.0-1-arm64.hpkg`
 - `zstd_bootstrap-1.5.6-1-arm64.hpkg`
 
@@ -111,6 +117,47 @@ writable copy of the image, captures the serial log, and verifies launch markers
 - `app_server`
 - `Tracker`
 - `Deskbar`
+
+`make nightly-arm64-sync` is now the canonical way to keep the base image current.
+It downloads the newest available ARM64 nightly MMC zip, extracts it under
+`/workspace/tmp/haiku-nightly-arm64/`, and updates a stable symlink that the
+image-builder consumes by default.
+
+## Target Hardware / Validation Profiles
+
+### Current automated validation target: QEMU `virt` ARM64 machine
+
+The current reproducible validation lane targets QEMU's generic ARM64 `virt`
+platform with the following effective hardware profile:
+
+- machine: `virt`
+- CPU model: `max`
+- architecture: AArch64 / ARMv8+
+- RAM: 2048 MiB during automated validation
+- firmware: `QEMU_EFI.fd` (AArch64 UEFI)
+- primary boot medium: USB-attached raw MMC-style disk image in QEMU
+- display device: `ramfb`
+- input devices: virtio keyboard + tablet for interactive runs
+- network device: virtio-net
+- storage/controller path used by validation: USB storage view of the raw image
+- interrupt controller discovered in guest logs: GICv2
+- serial console path: PL011 UART via QEMU `-nographic`
+
+This is the current authoritative hardware profile for CI-like desktop boot
+validation.
+
+### Build host / near-term physical bring-up target: Orange Pi 6 Plus
+
+The build and automation environment currently runs on an Orange Pi 6 Plus with:
+
+- SoC: CIX P1
+- CPU: 12 cores
+- RAM class: 16 GB
+- primary storage: NVMe
+- OS: Debian Trixie (aarch64)
+
+This host is used for reproducible builds today and remains the natural local
+board target for future non-QEMU bring-up work.
 
 ## QEMU Boot (working)
 

@@ -8,7 +8,7 @@ BUILD_DIR=${BUILD_DIR:-$HAIKU_DIR/generated.arm64}
 PACKAGE_TOOL=${PACKAGE_TOOL:-$BUILD_DIR/objects/linux/arm64/release/tools/package/package}
 BFS_SHELL=${BFS_SHELL:-$BUILD_DIR/objects/linux/arm64/release/tools/bfs_shell/bfs_shell}
 BFS_FUSE=${BFS_FUSE:-/workspace/tmp/bfs_fuse}
-BASE_IMAGE=${BASE_IMAGE:-/workspace/tmp/haiku-nightly-arm64/haiku-master-hrev59653-arm64-mmc.image}
+BASE_IMAGE=${BASE_IMAGE:-/workspace/tmp/haiku-nightly-arm64/haiku-master-arm64-current-mmc.image}
 DIRECT_HAIKU_HPKG=${DIRECT_HAIKU_HPKG:-$BUILD_DIR/objects/haiku/arm64/packaging/packages/haiku.hpkg}
 DIRECT_HAIKU_CONTENTS_DIR=${DIRECT_HAIKU_CONTENTS_DIR:-$BUILD_DIR/objects/haiku/arm64/packaging/packages_build/regular/hpkg_-haiku.hpkg/contents}
 DIRECT_HAIKU_PACKAGE_INFO=${DIRECT_HAIKU_PACKAGE_INFO:-$BUILD_DIR/objects/haiku/arm64/packaging/packages_build/regular/hpkg_-haiku.hpkg/haiku-package-info}
@@ -41,10 +41,11 @@ usage() {
 Build a reproducible validated ICU74 desktop boot image for early QEMU testing.
 
 Current default base image:
-  - /workspace/tmp/haiku-nightly-arm64/haiku-master-hrev59653-arm64-mmc.image
+  - /workspace/tmp/haiku-nightly-arm64/haiku-master-arm64-current-mmc.image
+    (managed by scripts/fetch-latest-arm64-nightly.sh)
 
 Package overlay behavior:
-  - modern hrev59653-style base: add direct haiku + zstd_bootstrap + expat_bootstrap
+  - modern rebootstrapped nightly base: add direct haiku + zstd_bootstrap + expat_bootstrap
   - legacy base: add direct haiku + compat_bootstrap_runtime + expat_bootstrap
     + sanitized bash/coreutils bootstrap packages
 
