@@ -57,11 +57,12 @@ make desktop-image  # assemble the validated ICU74 desktop test image
 For later regression work, the repo now includes a small QEMU desktop harness:
 
 ```sh
-make nightly-arm64-sync  # download latest arm64 nightly MMC image and update symlink
-make stock-validate      # validate the stock nightly image directly
-make desktop-image       # assemble the validated ICU74 desktop boot image
-make desktop-refresh     # sync nightly base, rebuild direct image, validate it
-make desktop-run         # start that image under detached tmux
+make nightly-arm64-sync    # download latest arm64 nightly MMC image and update symlink
+make stock-validate        # validate the stock nightly image directly
+make desktop-image         # assemble the validated ICU74 desktop boot image
+make desktop-refresh       # sync nightly base, rebuild direct image, validate it
+make desktop-probe-overlays # validate the stock/direct overlay matrix on current nightly
+make desktop-run           # start that image under detached tmux
 make desktop-status      # print session/log/state info and recent serial output
 make desktop-logs        # tail the serial log interactively
 make desktop-attach      # attach to the tmux session
@@ -74,6 +75,7 @@ Key automation scripts:
 
 - `scripts/fetch-latest-arm64-nightly.sh`
 - `scripts/build-validated-desktop-image.sh`
+- `scripts/probe-direct-package-overlays.sh`
 - `scripts/qemu-desktop-harness.sh`
 
 Current defaults:
@@ -122,6 +124,19 @@ writable copy of the image, captures the serial log, and verifies launch markers
 It downloads the newest available ARM64 nightly MMC zip, extracts it under
 `/workspace/tmp/haiku-nightly-arm64/`, and updates a stable symlink that the
 image-builder consumes by default.
+
+`make desktop-probe-overlays` automates the current overlay-minimization matrix.
+It validates:
+
+- stock nightly
+- direct package only
+- direct + `expat_bootstrap`
+- direct + `zstd_bootstrap`
+- direct + `zstd_bootstrap` + `expat_bootstrap`
+
+and writes a Markdown/TSV summary under:
+
+- `/workspace/tmp/haiku-overlay-probe/`
 
 ## Target Hardware / Validation Profiles
 

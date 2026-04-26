@@ -736,6 +736,42 @@ Interpretation:
   - `zstd_bootstrap`
 - The heavier compatibility/runtime overlay is now only a legacy fallback for older base images.
 
+---
+
+### Case AJ: automate the overlay matrix
+
+The manual stock/direct overlay experiments were then codified into an explicit
+probe script and Make target.
+
+Automation added:
+
+- `scripts/probe-direct-package-overlays.sh`
+- `make desktop-probe-overlays`
+
+Current automated matrix:
+
+- `stock`
+- `direct_only`
+- `direct_plus_expat`
+- `direct_plus_zstd`
+- `direct_plus_zstd_expat`
+
+Expected results encoded by the probe:
+
+- `stock` → pass
+- `direct_only` → fail
+- `direct_plus_expat` → fail
+- `direct_plus_zstd` → pass-with-issues (`lib:libexpat` still missing)
+- `direct_plus_zstd_expat` → pass
+
+The probe writes per-case validate logs plus machine-readable summaries under
+`/workspace/tmp/haiku-overlay-probe/`.
+
+Interpretation:
+
+- overlay minimization is now re-runnable instead of living only in shell history
+- regressions in the stock nightly or direct overlay assumptions can now be detected with one command
+
 ## Working conclusions
 
 1. **The direct regular package path is now real**
@@ -778,6 +814,7 @@ For older base images, the builder still retains a legacy fallback path using:
 4. Re-check stock desktop boot behavior without harness-injected launch jobs, now that both the stock nightly and direct-package lane validate.
 5. Decide whether the legacy fallback path for older base images should remain or be retired.
 6. Continue tracking upstream arm64 package/repository progress so the local no-download fallback can eventually be retired.
+7. If the current overlay keeps shrinking, tighten the probe expectations and eventually collapse the matrix to the stock/direct delta that still matters.
 
 ## Reference log files (session)
 
