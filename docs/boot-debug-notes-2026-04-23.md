@@ -738,6 +738,49 @@ Interpretation:
 
 ---
 
+### Automation snapshot (2026-04-26)
+
+At this point the reproducible automation lane includes:
+
+- `make nightly-arm64-sync`
+- `make stock-validate`
+- `make desktop-image`
+- `make desktop-refresh`
+- `make desktop-probe-overlays`
+
+The current probe writes machine-readable overlay summaries to:
+
+- `/workspace/tmp/haiku-overlay-probe/summary.md`
+- `/workspace/tmp/haiku-overlay-probe/summary.tsv`
+
+Current validation/build hardware context:
+
+#### Automated validation target
+
+- platform: QEMU `virt` AArch64 machine
+- CPU model: `max`
+- RAM: 2048 MiB
+- firmware: AArch64 UEFI (`QEMU_EFI.fd`)
+- boot medium: raw MMC-style disk image exposed to the guest as USB storage
+- framebuffer: `ramfb`
+- serial console: PL011 via `-nographic`
+- interrupt controller observed in guest logs: GICv2
+
+#### Local build / likely physical bring-up target
+
+- board: Orange Pi 6 Plus
+- SoC: CIX P1 (`CD8180` / `CD8160` family)
+- CPU topology: 12 CPU cores
+- RAM class: 16 GB (about 14 GiB visible to Linux)
+- primary storage: NVMe (`/dev/nvme0n1`)
+  - EFI: `/dev/nvme0n1p1`
+  - root: `/dev/nvme0n1p2`
+  - swap: `/dev/nvme0n1p3`
+- primary LAN interface: `enP1p49s0`
+- OS: Debian Trixie on AArch64
+
+---
+
 ### Case AJ: automate the overlay matrix
 
 The manual stock/direct overlay experiments were then codified into an explicit
