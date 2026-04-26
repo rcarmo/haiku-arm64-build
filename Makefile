@@ -18,7 +18,7 @@ DESKTOP_MONITOR_SOCKET := $(DESKTOP_HARNESS_DIR)/$(DESKTOP_TMUX_SESSION).monitor
 DESKTOP_SCREENSHOT := $(DESKTOP_HARNESS_DIR)/$(DESKTOP_TMUX_SESSION).ppm
 
 .PHONY: all toolchain image clean update test help \
-	nightly-arm64-sync stock-validate desktop-refresh \
+	nightly-arm64-sync stock-validate desktop-refresh desktop-probe-overlays \
 	desktop-image desktop-run desktop-stop desktop-status desktop-logs desktop-attach \
 	desktop-capture desktop-screenshot desktop-validate
 
@@ -33,10 +33,11 @@ help:
 	@echo "  raw        - Build raw images (esp.image + haiku-minimum.image)"
 	@echo "  test       - Quick QEMU smoke test (30s)"
 	@echo "  test-long  - Extended QEMU test (120s)"
-	@echo "  nightly-arm64-sync - Download latest arm64 nightly MMC image + update stable symlink"
-	@echo "  stock-validate     - Validate the current stock arm64 nightly image"
-	@echo "  desktop-image      - Assemble reproducible validated ICU74 desktop image"
-	@echo "  desktop-refresh    - Sync nightly base, rebuild direct image, validate it"
+	@echo "  nightly-arm64-sync   - Download latest arm64 nightly MMC image + update stable symlink"
+	@echo "  stock-validate       - Validate the current stock arm64 nightly image"
+	@echo "  desktop-image        - Assemble reproducible validated ICU74 desktop image"
+	@echo "  desktop-refresh      - Sync nightly base, rebuild direct image, validate it"
+	@echo "  desktop-probe-overlays - Validate the stock/direct overlay matrix on current nightly"
 	@echo "  desktop-run        - Start validated desktop image under detached tmux"
 	@echo "  desktop-status     - Show session, state, and latest serial log lines"
 	@echo "  desktop-logs       - Tail the detached session serial log"
@@ -152,6 +153,10 @@ desktop-image:
 	BASE_IMAGE="$(NIGHTLY_BASE_IMAGE)" OUTPUT_IMAGE="$(DESKTOP_BUILD_IMAGE)" $(CURDIR)/scripts/build-validated-desktop-image.sh
 
 desktop-refresh: nightly-arm64-sync desktop-image desktop-validate
+
+desktop-probe-overlays: nightly-arm64-sync desktop-image
+	@chmod +x $(CURDIR)/scripts/probe-direct-package-overlays.sh
+	$(CURDIR)/scripts/probe-direct-package-overlays.sh
 
 desktop-stop:
 	@chmod +x $(CURDIR)/scripts/qemu-desktop-harness.sh
