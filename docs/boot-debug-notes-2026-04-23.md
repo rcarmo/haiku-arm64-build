@@ -702,6 +702,40 @@ Interpretation:
 - the remaining issue was package metadata: first-boot writable-file processing for `bash_bootstrap` trips the arm64 desktop-validation lane, while the actual shell binaries are fine
 - the local fix belongs in metadata sanitization, not in another broad package/content repack
 
+---
+
+### Case AI: switch to a newer stock arm64 nightly base (`hrev59653`)
+
+After the upstream rebootstrapped base package set landed, the next pass re-tested
+both the stock nightly image and the direct-package lane on top of a newer arm64
+nightly base image.
+
+Result:
+
+- Stock `haiku-master-hrev59653-arm64-mmc.image` validates in QEMU and reaches the desktop markers.
+- Its stock package set now already includes the core bootstrap runtime pieces needed by the direct lane:
+  - `bash-5.3_bootstrap-1-arm64.hpkg`
+  - `coreutils-9.9_bootstrap-1-arm64.hpkg`
+  - `gcc_syslibs-13.3.0_2026_03_29_bootstrap-1-arm64.hpkg`
+  - `icu74-74.1_bootstrap-1-arm64.hpkg`
+  - `zlib-1.2.13_bootstrap-1-arm64.hpkg`
+- Replacing only the stock `haiku` package with the locally built direct package fails immediately without extra help:
+  - `runtime_loader: Cannot open file libzstd.so.1 ...`
+- Adding `zstd_bootstrap-1.5.6-1-arm64.hpkg` fixes that runtime failure.
+- With `zstd_bootstrap` but without `expat_bootstrap`, the system still reaches the desktop markers, but `package_daemon` reports `/boot/system` inconsistent because nothing provides `lib:libexpat` for the direct package.
+- With both `zstd_bootstrap` and `expat_bootstrap` added, the direct-package lane validates cleanly and `/boot/system` is consistent.
+- The older `compat_bootstrap_runtime` package is therefore no longer needed on this newer base image.
+- The older sanitized `bash_bootstrap` / `coreutils_bootstrap` injection path is also no longer needed on this newer base image.
+
+Interpretation:
+
+- The upstream rebootstrapped nightly base materially reduced the local overlay required for the validated lane.
+- On a current stock arm64 nightly base, the direct-package desktop lane now only needs:
+  - direct `haiku.hpkg`
+  - `expat_bootstrap`
+  - `zstd_bootstrap`
+- The heavier compatibility/runtime overlay is now only a legacy fallback for older base images.
+
 ## Working conclusions
 
 1. **The direct regular package path is now real**
@@ -713,7 +747,7 @@ Interpretation:
 4. **The harness is now authoritative for desktop readiness**
    - additive injection plus correct marker-path handling makes marker validation trustworthy.
 5. **Package composition still matters outside the main `haiku` package**
-   - `compat_bootstrap_runtime` and `expat_bootstrap` are still part of the currently validated bootable set, and `bash_bootstrap` needs metadata sanitization to avoid first-boot writable-file processing on arm64.
+   - on current `hrev59653`-style bases, the validated overlay has shrunk to `expat_bootstrap` and `zstd_bootstrap`; the older `compat_bootstrap_runtime` and sanitized shell-package path are only a legacy fallback for older base images.
 6. **`env /system/boot/SetupEnvironment` crash was an ICU version collision**
    - this remains true and was the key to clearing the old `Thread 51` / `consoled -4` path.
 7. **`5059bc3bc8` and upstream `76e076b03b` are valid correctness fixes in the same area**
@@ -723,21 +757,26 @@ Interpretation:
 
 ## Remaining deliberate shims
 
-The current validated lane still depends on:
+The current default validated lane still depends on:
+
+- `expat_bootstrap-2.5.0-1-arm64.hpkg`
+- `zstd_bootstrap-1.5.6-1-arm64.hpkg`
+
+These are no longer emergency diagnosis artifacts; they are the current known-good compatibility set for the direct-package desktop image on top of the newer stock arm64 nightly base.
+
+For older base images, the builder still retains a legacy fallback path using:
 
 - `compat_bootstrap_runtime-1-2-arm64.hpkg`
-- `expat_bootstrap-2.5.0-1-arm64.hpkg`
-- a local metadata-only `bash_bootstrap` sanitization step (drop `GLOBAL_WRITABLE_FILES`)
-
-These are no longer emergency diagnosis artifacts; they are the current known-good compatibility set for the direct-package desktop image.
+- sanitized `bash_bootstrap`
+- `coreutils_bootstrap`
 
 ## Immediate next steps
 
-1. Replace the local `bash_bootstrap` metadata sanitization step with a cleaner upstreamable fix once the underlying first-boot processing issue is understood.
-2. Replace `compat_bootstrap_runtime` with cleaner direct/upstream packages where possible.
-3. Replace `expat_bootstrap` with the normal package path instead of the bootstrap package.
-4. Move the 512 MiB system-partition growth into the normal image build flow rather than post-processing the nightly base image.
-5. Re-check stock desktop boot behavior without harness-injected launch jobs, now that the full direct-package lane validates.
+1. Replace `expat_bootstrap` with the normal package path instead of the bootstrap package.
+2. Replace `zstd_bootstrap` with the normal package path or ensure the base image always carries it.
+3. Move the 512 MiB system-partition growth into the normal image build flow rather than post-processing the nightly base image.
+4. Re-check stock desktop boot behavior without harness-injected launch jobs, now that both the stock nightly and direct-package lane validate.
+5. Decide whether the legacy fallback path for older base images should remain or be retired.
 6. Continue tracking upstream arm64 package/repository progress so the local no-download fallback can eventually be retired.
 
 ## Reference log files (session)

@@ -15,9 +15,10 @@ comes up far enough to launch `app_server`, `Tracker`, and `Deskbar`.
 
 _This screenshot shows the current validated boot lane with Tracker visible. The
 current image now uses the full direct `haiku.hpkg` package on a grown system
-partition. It still relies on `compat_bootstrap_runtime` and `expat_bootstrap`,
-and it still uses the local arm64 `HaikuPortsCross` fallback in no-download
-mode, but it no longer depends on repacked `bash`/`coreutils` packages._
+partition and now rides on top of the newer hrev59653-style stock arm64
+nightly bootstrap package set. The current overlay is down to `expat_bootstrap`
+and `zstd_bootstrap`, while the older `compat_bootstrap_runtime` and repacked
+shell-package workarounds are no longer part of the default validated image._
 
 Directly validated in-guest:
 
@@ -71,9 +72,10 @@ The harness script is:
 
 Current defaults:
 
+- base nightly image: `/workspace/tmp/haiku-nightly-arm64/haiku-master-hrev59653-arm64-mmc.image`
 - built desktop image: `/workspace/tmp/haiku-build/validated/haiku-arm64-icu74-desktop.boot.img`
 - direct package: `/workspace/tmp/haiku-build/validated/haiku-direct-icu74.hpkg`
-- compat package: `/workspace/tmp/haiku-build/validated/compat_bootstrap_runtime-1-2-arm64.hpkg`
+- compat package artifact (legacy fallback only): `/workspace/tmp/haiku-build/validated/compat_bootstrap_runtime-1-2-arm64.hpkg`
 - graphical run image: same as above
 - validation image: same as above
 
@@ -81,10 +83,12 @@ Current defaults:
 
 - the generated direct `haiku.hpkg` contents
 - a grown system partition (currently 512 MiB)
-- `compat_bootstrap_runtime-1-2-arm64.hpkg`
+- the stock hrev59653 arm64 nightly bootstrap package set from the base image
 - `expat_bootstrap-2.5.0-1-arm64.hpkg`
-- `bash_bootstrap-4.4.023-1-arm64.hpkg`
-- `coreutils_bootstrap-9.9-1-arm64.hpkg`
+- `zstd_bootstrap-1.5.6-1-arm64.hpkg`
+
+For older base images, the script still has a legacy fallback path that injects
+`compat_bootstrap_runtime` plus sanitized bootstrap `bash`/`coreutils` packages.
 
 `make desktop-run` is the primary async path. It returns immediately and writes a
 stable tmux/state/monitor setup under:
@@ -141,12 +145,13 @@ qemu-system-aarch64 \
 ## Current Caveats
 
 The direct package lane now validates end-to-end, but it is not fully de-hacked yet.
-The remaining deliberate shims are:
+The remaining deliberate shims in the current default validated lane are:
 
-- `compat_bootstrap_runtime-1-2-arm64.hpkg`
 - `expat_bootstrap-2.5.0-1-arm64.hpkg`
-- a local metadata-only `bash_bootstrap` sanitization step that drops
-  `GLOBAL_WRITABLE_FILES` before image assembly on arm64
+- `zstd_bootstrap-1.5.6-1-arm64.hpkg`
+
+A legacy fallback path is still kept in the builder for older base images, where
+it can inject `compat_bootstrap_runtime` plus sanitized bootstrap shell packages.
 
 The `haiku/` branch `arm64-bootstrap-fixes` also now includes a merge of current
 `upstream/master`, but still keeps an arm64 `HAIKU_NO_DOWNLOADS=1` fallback to
