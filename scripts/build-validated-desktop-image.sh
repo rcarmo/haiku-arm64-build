@@ -9,13 +9,12 @@ PACKAGE_TOOL=${PACKAGE_TOOL:-$BUILD_DIR/objects/linux/arm64/release/tools/packag
 BFS_SHELL=${BFS_SHELL:-$BUILD_DIR/objects/linux/arm64/release/tools/bfs_shell/bfs_shell}
 BFS_FUSE=${BFS_FUSE:-/workspace/tmp/bfs_fuse}
 BASE_IMAGE=${BASE_IMAGE:-/workspace/tmp/haiku-nightly-arm64/haiku-master-hrev59637-arm64-mmc.image}
-REPACKED_DIR=${REPACKED_DIR:-/workspace/tmp/repacked-hpkg}
 DIRECT_HAIKU_HPKG=${DIRECT_HAIKU_HPKG:-$BUILD_DIR/objects/haiku/arm64/packaging/packages/haiku.hpkg}
 DIRECT_HAIKU_CONTENTS_DIR=${DIRECT_HAIKU_CONTENTS_DIR:-$BUILD_DIR/objects/haiku/arm64/packaging/packages_build/regular/hpkg_-haiku.hpkg/contents}
 DIRECT_HAIKU_PACKAGE_INFO=${DIRECT_HAIKU_PACKAGE_INFO:-$BUILD_DIR/objects/haiku/arm64/packaging/packages_build/regular/hpkg_-haiku.hpkg/haiku-package-info}
 EXPAT_HPKG=${EXPAT_HPKG:-$BUILD_DIR/objects/haiku/arm64/packaging/repositories/HaikuPortsCross-build/packages/expat_bootstrap-2.5.0-1-arm64.hpkg}
-BASH_HPKG=${BASH_HPKG:-$REPACKED_DIR/bash-4.4.023-1-arm64.hpkg}
-COREUTILS_HPKG=${COREUTILS_HPKG:-$REPACKED_DIR/coreutils-8.22-1-arm64.hpkg}
+BASH_HPKG=${BASH_HPKG:-$BUILD_DIR/objects/haiku/arm64/packaging/repositories/HaikuPortsCross-build/packages/bash_bootstrap-4.4.023-1-arm64.hpkg}
+COREUTILS_HPKG=${COREUTILS_HPKG:-$BUILD_DIR/objects/haiku/arm64/packaging/repositories/HaikuPortsCross-build/packages/coreutils_bootstrap-9.9-1-arm64.hpkg}
 OUTPUT_DIR=${OUTPUT_DIR:-/workspace/tmp/haiku-build/validated}
 OUTPUT_IMAGE=${OUTPUT_IMAGE:-$OUTPUT_DIR/haiku-arm64-icu74-desktop.boot.img}
 OUTPUT_HAIKU_HPKG=${OUTPUT_HAIKU_HPKG:-$OUTPUT_DIR/haiku-direct-icu74.hpkg}
@@ -39,6 +38,11 @@ GEN_PACKAGES=${GEN_PACKAGES:-$BUILD_DIR/build_packages}
 usage() {
   cat <<'EOF'
 Build a reproducible validated ICU74 desktop boot image for early QEMU testing.
+
+Default shell/runtime package set:
+  - bash_bootstrap-4.4.023-1-arm64.hpkg
+  - coreutils_bootstrap-9.9-1-arm64.hpkg
+  - expat_bootstrap-2.5.0-1-arm64.hpkg
 
 Environment overrides:
   BASE_IMAGE, DIRECT_HAIKU_HPKG, DIRECT_HAIKU_CONTENTS_DIR,
@@ -87,6 +91,45 @@ require_file "$DIRECT_HAIKU_PACKAGE_INFO"
 require_file "$EXPAT_HPKG"
 require_file "$BASH_HPKG"
 require_file "$COREUTILS_HPKG"
+
+EFFECTIVE_BASH_HPKG="$BASH_HPKG"
+
+sanitize_bash_package_if_needed() {
+  local inspect_dir="$WORK_DIR/bash-package-inspect"
+  local stage_dir="$WORK_DIR/bash-package-stage"
+  local package_info="$WORK_DIR/bash-package-info"
+
+  rm -rf "$inspect_dir" "$stage_dir"
+  mkdir -p "$inspect_dir" "$stage_dir"
+  "$PACKAGE_TOOL" extract -C "$inspect_dir" "$BASH_HPKG" >/dev/null
+
+  if ! grep -q 'global-writable-files' "$inspect_dir/.PackageInfo"; then
+    return 0
+  fi
+  if ! grep -q 'settings/bashrc' "$inspect_dir/.PackageInfo"; then
+    return 0
+  fi
+
+  echo "== sanitizing bash package metadata =="
+  cp "$inspect_dir/.PackageInfo" "$package_info"
+  python3 - "$package_info" <<'PY'
+from pathlib import Path
+import sys
+p = Path(sys.argv[1])
+text = p.read_text()
+old = 'global-writable-files {\n\t"settings/bashrc" keep-old\n}\n'
+if old not in text:
+    raise SystemExit('expected bash global-writable-files block not found')
+p.write_text(text.replace(old, ''))
+PY
+
+  cp -a "$inspect_dir/." "$stage_dir/"
+  rm -f "$stage_dir/.PackageInfo"
+  EFFECTIVE_BASH_HPKG="$WORK_DIR/$(basename "$BASH_HPKG")"
+  "$PACKAGE_TOOL" create -0 -C "$stage_dir" -i "$package_info" "$EFFECTIVE_BASH_HPKG" >/dev/null
+}
+
+sanitize_bash_package_if_needed
 
 create_compat_package() {
   rm -rf "$COMPAT_STAGE"
@@ -264,7 +307,7 @@ PY
   cp "$OUTPUT_HAIKU_HPKG" "$pkgdir/$(basename "$OUTPUT_HAIKU_HPKG")"
   cp "$OUTPUT_COMPAT_HPKG" "$pkgdir/compat_bootstrap_runtime-1-2-arm64.hpkg"
   cp "$EXPAT_HPKG" "$pkgdir/"
-  cp "$BASH_HPKG" "$pkgdir/"
+  cp "$EFFECTIVE_BASH_HPKG" "$pkgdir/"
   cp "$COREUTILS_HPKG" "$pkgdir/"
 
   find "$MOUNT_POINT/myfs/system/non-packaged/lib" -maxdepth 1 -type f \
