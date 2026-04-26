@@ -11,6 +11,14 @@ full direct-package lane. The kernel loads, BFS mounts, `launch_daemon` starts,
 `package_daemon` reports `/boot/system` consistent, and the desktop user-session
 comes up far enough to launch `app_server`, `Tracker`, and `Deskbar`.
 
+The automation lane now also covers:
+
+- syncing the latest stock ARM64 nightly base image
+- validating that stock nightly directly
+- rebuilding the direct-package overlay image on top of the managed base
+- probing the current overlay-minimization matrix (`stock`, `direct_only`,
+  `direct_plus_expat`, `direct_plus_zstd`, `direct_plus_zstd_expat`)
+
 ![QEMU desktop capture with Tracker visible](docs/haiku-desktop-tracker-qemu-2026-04-23.png)
 
 _This screenshot shows the current validated boot lane with Tracker visible. The
@@ -134,9 +142,11 @@ It validates:
 - direct + `zstd_bootstrap`
 - direct + `zstd_bootstrap` + `expat_bootstrap`
 
-and writes a Markdown/TSV summary under:
+and writes both per-case validation logs and a Markdown/TSV summary under:
 
-- `/workspace/tmp/haiku-overlay-probe/`
+- `/workspace/tmp/haiku-overlay-probe/summary.md`
+- `/workspace/tmp/haiku-overlay-probe/summary.tsv`
+- `/workspace/tmp/haiku-overlay-probe/*.validate.log`
 
 ## Target Hardware / Validation Profiles
 
@@ -163,16 +173,25 @@ validation.
 
 ### Build host / near-term physical bring-up target: Orange Pi 6 Plus
 
-The build and automation environment currently runs on an Orange Pi 6 Plus with:
+The build and automation environment currently runs on an Orange Pi 6 Plus and
+that board remains the natural near-term physical bring-up target.
 
-- SoC: CIX P1
-- CPU: 12 cores
-- RAM class: 16 GB
-- primary storage: NVMe
+Current local hardware profile:
+
+- board: Orange Pi 6 Plus
+- SoC: CIX P1 (`CD8180` / `CD8160` family)
+- CPU topology: 12 CPU cores
+- RAM class: 16 GB (about 14 GiB visible to Linux)
+- primary storage: NVMe (`/dev/nvme0n1`)
+  - EFI: `/dev/nvme0n1p1`
+  - root: `/dev/nvme0n1p2`
+  - swap: `/dev/nvme0n1p3`
+- primary LAN interface: `enP1p49s0`
 - OS: Debian Trixie (aarch64)
 
-This host is used for reproducible builds today and remains the natural local
-board target for future non-QEMU bring-up work.
+This host is used for reproducible builds today and is also the most practical
+local board target for future non-QEMU bring-up once the automated QEMU lane is
+fully pared down.
 
 ## QEMU Boot (working)
 
@@ -192,9 +211,13 @@ qemu-system-aarch64 \
 
 ## Build Host
 
-- Orange Pi 6 Plus (CIX P1, 12 cores, 14 GiB RAM)
-- Debian Trixie (aarch64), kernel 6.6.89-cix
-- GCC 14.2.0 (host) / 13.3.0 (cross-compiler)
+- board: Orange Pi 6 Plus
+- SoC: CIX P1 (`CD8180` / `CD8160` family)
+- CPU: 12 cores
+- RAM: ~14 GiB visible to Linux
+- storage: NVMe root on `/dev/nvme0n1p2`
+- OS: Debian Trixie (aarch64), kernel 6.6.89-cix
+- compiler toolchain: GCC 14.2.0 (host) / 13.3.0 (cross-compiler)
 
 ## Repos
 
