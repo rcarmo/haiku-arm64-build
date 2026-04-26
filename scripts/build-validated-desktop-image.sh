@@ -8,11 +8,12 @@ BUILD_DIR=${BUILD_DIR:-$HAIKU_DIR/generated.arm64}
 PACKAGE_TOOL=${PACKAGE_TOOL:-$BUILD_DIR/objects/linux/arm64/release/tools/package/package}
 BFS_SHELL=${BFS_SHELL:-$BUILD_DIR/objects/linux/arm64/release/tools/bfs_shell/bfs_shell}
 BFS_FUSE=${BFS_FUSE:-/workspace/tmp/bfs_fuse}
-BASE_IMAGE=${BASE_IMAGE:-/workspace/tmp/haiku-nightly-arm64/haiku-master-hrev59637-arm64-mmc.image}
+BASE_IMAGE=${BASE_IMAGE:-/workspace/tmp/haiku-nightly-arm64/haiku-master-hrev59653-arm64-mmc.image}
 DIRECT_HAIKU_HPKG=${DIRECT_HAIKU_HPKG:-$BUILD_DIR/objects/haiku/arm64/packaging/packages/haiku.hpkg}
 DIRECT_HAIKU_CONTENTS_DIR=${DIRECT_HAIKU_CONTENTS_DIR:-$BUILD_DIR/objects/haiku/arm64/packaging/packages_build/regular/hpkg_-haiku.hpkg/contents}
 DIRECT_HAIKU_PACKAGE_INFO=${DIRECT_HAIKU_PACKAGE_INFO:-$BUILD_DIR/objects/haiku/arm64/packaging/packages_build/regular/hpkg_-haiku.hpkg/haiku-package-info}
 EXPAT_HPKG=${EXPAT_HPKG:-$BUILD_DIR/objects/haiku/arm64/packaging/repositories/HaikuPortsCross-build/packages/expat_bootstrap-2.5.0-1-arm64.hpkg}
+ZSTD_HPKG=${ZSTD_HPKG:-$BUILD_DIR/objects/haiku/arm64/packaging/repositories/HaikuPortsCross-build/packages/zstd_bootstrap-1.5.6-1-arm64.hpkg}
 BASH_HPKG=${BASH_HPKG:-$BUILD_DIR/objects/haiku/arm64/packaging/repositories/HaikuPortsCross-build/packages/bash_bootstrap-4.4.023-1-arm64.hpkg}
 COREUTILS_HPKG=${COREUTILS_HPKG:-$BUILD_DIR/objects/haiku/arm64/packaging/repositories/HaikuPortsCross-build/packages/coreutils_bootstrap-9.9-1-arm64.hpkg}
 OUTPUT_DIR=${OUTPUT_DIR:-/workspace/tmp/haiku-build/validated}
@@ -39,16 +40,20 @@ usage() {
   cat <<'EOF'
 Build a reproducible validated ICU74 desktop boot image for early QEMU testing.
 
-Default shell/runtime package set:
-  - bash_bootstrap-4.4.023-1-arm64.hpkg
-  - coreutils_bootstrap-9.9-1-arm64.hpkg
-  - expat_bootstrap-2.5.0-1-arm64.hpkg
+Current default base image:
+  - /workspace/tmp/haiku-nightly-arm64/haiku-master-hrev59653-arm64-mmc.image
+
+Package overlay behavior:
+  - modern hrev59653-style base: add direct haiku + zstd_bootstrap + expat_bootstrap
+  - legacy base: add direct haiku + compat_bootstrap_runtime + expat_bootstrap
+    + sanitized bash/coreutils bootstrap packages
 
 Environment overrides:
   BASE_IMAGE, DIRECT_HAIKU_HPKG, DIRECT_HAIKU_CONTENTS_DIR,
-  DIRECT_HAIKU_PACKAGE_INFO, EXPAT_HPKG, BASH_HPKG, COREUTILS_HPKG,
-  OUTPUT_DIR, OUTPUT_IMAGE, OUTPUT_HAIKU_HPKG, OUTPUT_COMPAT_HPKG,
-  BUILD_DIR, PACKAGE_TOOL, BFS_SHELL, BFS_FUSE, SYSTEM_PARTITION_MIB
+  DIRECT_HAIKU_PACKAGE_INFO, EXPAT_HPKG, ZSTD_HPKG, BASH_HPKG,
+  COREUTILS_HPKG, OUTPUT_DIR, OUTPUT_IMAGE, OUTPUT_HAIKU_HPKG,
+  OUTPUT_COMPAT_HPKG, BUILD_DIR, PACKAGE_TOOL, BFS_SHELL, BFS_FUSE,
+  SYSTEM_PARTITION_MIB
 EOF
 }
 
@@ -89,6 +94,7 @@ require_file "$DIRECT_HAIKU_HPKG"
 require_file "$DIRECT_HAIKU_PACKAGE_INFO"
 [[ -d "$DIRECT_HAIKU_CONTENTS_DIR" ]] || { echo "missing dir: $DIRECT_HAIKU_CONTENTS_DIR" >&2; exit 1; }
 require_file "$EXPAT_HPKG"
+require_file "$ZSTD_HPKG"
 require_file "$BASH_HPKG"
 require_file "$COREUTILS_HPKG"
 
@@ -292,23 +298,43 @@ PY
   sleep 2
 
   local pkgdir="$MOUNT_POINT/myfs/system/packages"
-  find "$pkgdir" -maxdepth 1 -type f \
-    \( -name 'haiku-*.hpkg' -o -name 'compat_bootstrap_runtime-*.hpkg' \) \
-    -delete
-  rm -f "$pkgdir/gcc_syslibs-13.2.0_2023_08_10-1-arm64.hpkg" \
-        "$pkgdir/icu-67.1-2-arm64.hpkg" \
-        "$pkgdir/zlib-1.2.13-1-arm64.hpkg" \
-        "$pkgdir/expat_bootstrap-2.5.0-1-arm64.hpkg" \
-        "$pkgdir/bash-4.4.023-1-arm64.hpkg" \
-        "$pkgdir/bash_bootstrap-4.4.023-1-arm64.hpkg" \
-        "$pkgdir/coreutils-8.22-1-arm64.hpkg" \
-        "$pkgdir/coreutils_bootstrap-9.9-1-arm64.hpkg"
+  local modern_base_deps=0
+  if ls "$pkgdir"/bash-*_bootstrap-*-arm64.hpkg >/dev/null 2>&1 \
+      && ls "$pkgdir"/coreutils-*_bootstrap-*-arm64.hpkg >/dev/null 2>&1 \
+      && ls "$pkgdir"/gcc_syslibs-*_bootstrap-*-arm64.hpkg >/dev/null 2>&1 \
+      && ls "$pkgdir"/icu74-*_bootstrap-*-arm64.hpkg >/dev/null 2>&1 \
+      && ls "$pkgdir"/zlib-*_bootstrap-*-arm64.hpkg >/dev/null 2>&1; then
+    modern_base_deps=1
+    echo "== detected modern bootstrap base package set =="
+  else
+    echo "== detected legacy base package set =="
+  fi
 
-  cp "$OUTPUT_HAIKU_HPKG" "$pkgdir/$(basename "$OUTPUT_HAIKU_HPKG")"
-  cp "$OUTPUT_COMPAT_HPKG" "$pkgdir/compat_bootstrap_runtime-1-2-arm64.hpkg"
-  cp "$EXPAT_HPKG" "$pkgdir/"
-  cp "$EFFECTIVE_BASH_HPKG" "$pkgdir/"
-  cp "$COREUTILS_HPKG" "$pkgdir/"
+  find "$pkgdir" -maxdepth 1 -type f \
+    \( -name 'haiku-*.hpkg' -o -name 'compat_bootstrap_runtime-*.hpkg' -o -name 'expat_bootstrap-*.hpkg' -o -name 'zstd_bootstrap-*.hpkg' \) \
+    -delete
+
+  if (( modern_base_deps )); then
+    rm -f "$pkgdir/bash_bootstrap-4.4.023-1-arm64.hpkg" \
+          "$pkgdir/coreutils_bootstrap-9.9-1-arm64.hpkg"
+    cp "$OUTPUT_HAIKU_HPKG" "$pkgdir/$(basename "$OUTPUT_HAIKU_HPKG")"
+    cp "$EXPAT_HPKG" "$pkgdir/"
+    cp "$ZSTD_HPKG" "$pkgdir/"
+  else
+    rm -f "$pkgdir/gcc_syslibs-13.2.0_2023_08_10-1-arm64.hpkg" \
+          "$pkgdir/icu-67.1-2-arm64.hpkg" \
+          "$pkgdir/zlib-1.2.13-1-arm64.hpkg" \
+          "$pkgdir/bash-4.4.023-1-arm64.hpkg" \
+          "$pkgdir/bash_bootstrap-4.4.023-1-arm64.hpkg" \
+          "$pkgdir/coreutils-8.22-1-arm64.hpkg" \
+          "$pkgdir/coreutils_bootstrap-9.9-1-arm64.hpkg"
+
+    cp "$OUTPUT_HAIKU_HPKG" "$pkgdir/$(basename "$OUTPUT_HAIKU_HPKG")"
+    cp "$OUTPUT_COMPAT_HPKG" "$pkgdir/compat_bootstrap_runtime-1-2-arm64.hpkg"
+    cp "$EXPAT_HPKG" "$pkgdir/"
+    cp "$EFFECTIVE_BASH_HPKG" "$pkgdir/"
+    cp "$COREUTILS_HPKG" "$pkgdir/"
+  fi
 
   find "$MOUNT_POINT/myfs/system/non-packaged/lib" -maxdepth 1 -type f \
     \( -name 'libstdc++.so*' -o -name 'libgcc_s.so*' -o -name 'libicu*.so*' -o -name 'libzstd.so*' -o -name 'libz.so*' \) \
