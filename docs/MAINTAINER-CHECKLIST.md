@@ -62,6 +62,10 @@ As of 2026-04-27, the expected modern overlay state is:
   - `data/deskbar/menu/Demos/Cortex`
 - the normal local `zstd-1.5.6-1-arm64.hpkg` is currently a stub package and
   does not provide `libzstd.so.1`
+- a smaller local prototype replacement,
+  `/workspace/tmp/zstd-runtime-proto/zstd_runtime-1.5.6-1-arm64.hpkg`, also
+  validates cleanly as a `lib:libzstd` provider, but is not yet the default
+  builder input
 
 Current probe expectations:
 
@@ -86,6 +90,8 @@ Current probe expectations:
   `/workspace/tmp/haiku-build/validated/haiku-direct-icu74.hpkg`
 - legacy fallback compat package:
   `/workspace/tmp/haiku-build/validated/compat_bootstrap_runtime-1-2-arm64.hpkg`
+- prototype zstd runtime replacement:
+  `/workspace/tmp/zstd-runtime-proto/zstd_runtime-1.5.6-1-arm64.hpkg`
 
 ### Harness output
 
@@ -242,6 +248,8 @@ Meaning:
 - direct package still needs `libzstd.so.1`
 - stock nightly base still lacks it
 - normal local `zstd` package is not yet usable as a replacement
+- a smaller local `zstd_runtime` replacement candidate now exists, but has not
+  yet been wired into the default builder path
 
 ### Package solver inconsistency
 
@@ -272,6 +280,7 @@ When the observed state changes, update docs in the same tranche as the code:
 
 - `README.md`
 - `docs/boot-debug-notes-2026-04-23.md`
+- `docs/ZSTD-RUNTIME-VALIDATION-2026-04-27.md` when the zstd-replacement state changes
 - `docs/MAINTAINER-CHECKLIST.md`
 - `docs/UBOOT-ASSESSMENT.md` if the board-boot strategy changes
 - `AGENTS.md`
@@ -300,7 +309,8 @@ validation targets have passed.
 ## Current maintainer priorities
 
 1. remove the remaining `zstd_bootstrap` dependency, or ensure the stock base
-   carries `libzstd.so.1`
+   carries `libzstd.so.1` (the local `zstd_runtime` prototype is the current
+   smaller replacement candidate)
 2. collapse the extra `expat_bootstrap` control cases from the probe when they
    stop being useful
 3. decide when to retire the older legacy fallback path

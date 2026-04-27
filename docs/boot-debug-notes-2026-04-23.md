@@ -885,6 +885,17 @@ The current default validated lane still depends on:
 
 This remaining zstd package is no longer an emergency diagnosis artifact; it is the current known-good compatibility shim for the direct-package desktop image on top of the newer stock arm64 nightly base.
 
+A focused follow-up on 2026-04-27 also verified that the normal local
+`zstd-1.5.6-1-arm64.hpkg` is still only a stub package, but that a smaller
+runtime-only replacement built from the `zstd_bootstrap` payload also validates
+cleanly:
+
+- `/workspace/tmp/zstd-runtime-proto/zstd_runtime-1.5.6-1-arm64.hpkg`
+
+That prototype is not yet wired into the default builder path, but it narrows
+the actual requirement further: the modern lane needs a provider for
+`lib:libzstd`, not necessarily the full broader `zstd_bootstrap` package.
+
 For older base images, the builder still retains a legacy fallback path using:
 
 - `compat_bootstrap_runtime-1-2-arm64.hpkg`
@@ -893,7 +904,7 @@ For older base images, the builder still retains a legacy fallback path using:
 
 ## Immediate next steps
 
-1. Replace `zstd_bootstrap` with the normal package path or ensure the base image always carries it.
+1. Decide whether to formalize the smaller local `zstd_runtime` replacement in the builder, or instead wait for the normal package path / stock base image to carry `libzstd.so.1` directly.
 2. Move the 512 MiB system-partition growth into the normal image build flow rather than post-processing the nightly base image.
 3. Re-check stock desktop boot behavior without harness-injected launch jobs, now that both the stock nightly and direct-package lane validate.
 4. Decide whether the legacy fallback path for older base images should remain or be retired.
