@@ -16,11 +16,13 @@ DESKTOP_TMUX_SESSION := haiku-desktop
 DESKTOP_STATE_FILE := $(DESKTOP_HARNESS_DIR)/$(DESKTOP_TMUX_SESSION).state
 DESKTOP_MONITOR_SOCKET := $(DESKTOP_HARNESS_DIR)/$(DESKTOP_TMUX_SESSION).monitor.sock
 DESKTOP_SCREENSHOT := $(DESKTOP_HARNESS_DIR)/$(DESKTOP_TMUX_SESSION).ppm
+ORANGEPI6PLUS_EFI_SNAPSHOT_DIR := /workspace/tmp/orangepi6plus-efi-snapshot/latest
+ORANGEPI6PLUS_EFI_ESP_DEV := /dev/nvme0n1p1
 
 .PHONY: all toolchain image clean update test help \
 	nightly-arm64-sync stock-validate desktop-refresh desktop-probe-overlays \
 	desktop-image desktop-run desktop-stop desktop-status desktop-logs desktop-attach \
-	desktop-capture desktop-screenshot desktop-validate
+	desktop-capture desktop-screenshot desktop-validate orangepi6plus-efi-snapshot
 
 help:
 	@echo "Haiku ARM64 Build System"
@@ -46,6 +48,7 @@ help:
 	@echo "  desktop-capture    - Blocking convenience target: run + wait + screenshot"
 	@echo "  desktop-stop       - Stop the detached desktop tmux session"
 	@echo "  desktop-validate   - Headless marker-based desktop validation harness"
+	@echo "  orangepi6plus-efi-snapshot - Snapshot the current host EFI/GRUB boot surface"
 	@echo "  update     - Git pull both repos"
 	@echo "  clean      - Remove generated.arm64"
 	@echo "  distclean  - Remove everything (repos + generated)"
@@ -224,3 +227,8 @@ desktop-screenshot:
 desktop-validate:
 	@chmod +x $(CURDIR)/scripts/qemu-desktop-harness.sh
 	$(CURDIR)/scripts/qemu-desktop-harness.sh validate --image "$(DESKTOP_VALIDATE_IMAGE)"
+
+orangepi6plus-efi-snapshot:
+	@chmod +x $(CURDIR)/scripts/snapshot-orangepi6plus-efi.sh
+	ESP_DEV="$(ORANGEPI6PLUS_EFI_ESP_DEV)" OUTPUT_DIR="$(ORANGEPI6PLUS_EFI_SNAPSHOT_DIR)" \
+		$(CURDIR)/scripts/snapshot-orangepi6plus-efi.sh $(if $(filter 1 yes true,$(INCLUDE_LARGE)),--include-large,)

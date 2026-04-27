@@ -75,6 +75,7 @@ make desktop-attach
 make desktop-screenshot
 make desktop-stop
 make desktop-validate
+make orangepi6plus-efi-snapshot
 ```
 
 ## Authoritative scripts
@@ -83,6 +84,7 @@ make desktop-validate
 - `scripts/build-validated-desktop-image.sh`
 - `scripts/probe-direct-package-overlays.sh`
 - `scripts/qemu-desktop-harness.sh`
+- `scripts/snapshot-orangepi6plus-efi.sh`
 
 When editing workflow behavior, read the relevant script fully before changing
 it.
@@ -245,6 +247,16 @@ The current recommendation is:
 For the reasoning and the comparison against the local 9front work, read:
 
 - `docs/UBOOT-ASSESSMENT.md`
+
+## Current observed Orange Pi 6 Plus boot facts
+
+A pinned EFI/GRUB snapshot baseline now exists at:
+
+- `bootstrap/orangepi6plus/host-efi-2026-04-27/`
+
+Use `make orangepi6plus-efi-snapshot` to refresh a working-tree snapshot under:
+
+- `/workspace/tmp/orangepi6plus-efi-snapshot/latest`
 
 ## Current observed Orange Pi 6 Plus boot facts
 
