@@ -1,0 +1,7 @@
+snapshot_time_utc=2026-04-27T06:06:41Z
+hostname=orangepi6plus
+source_device=/dev/nvme0n1p1
+uuid=7448-7FE4
+partuuid=efa40ac1-d84a-419e-818d-b5e809684922
+fstype=vfat
+include_large=0

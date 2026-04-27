@@ -87,6 +87,10 @@ is EFI/GRUB with a DTB-based Linux boot path.
 That does **not** prove U-Boot is absent underneath, but it does mean the first
 practical bring-up target for Haiku is likely **not** a raw-blob U-Boot rebuild.
 
+A pinned snapshot of that current boot surface is now checked into this repo at:
+
+- `bootstrap/orangepi6plus/host-efi-2026-04-27/`
+
 ## Recommendation: prefer an EFI-first physical bring-up
 
 For the first Orange Pi 6 Plus Haiku boot attempts, prefer this order:
@@ -133,7 +137,14 @@ this order.
 
 ### 1. Preserve the known-good board boot artifacts
 
-Create a board-specific bootstrap tree, e.g.:
+This work has now started with:
+
+- `bootstrap/orangepi6plus/host-efi-2026-04-27/`
+
+That snapshot preserves the currently observed EFI/GRUB boot surface, including
+small copied boot files plus a full manifest/checksum listing for the ESP.
+
+Future snapshots should continue under a board-specific bootstrap tree, e.g.:
 
 - `bootstrap/orangepi6plus/<vendor-version>/`
 
@@ -196,7 +207,9 @@ the Allwinner ones from 9front.
 
 1. keep QEMU `virt` + UEFI as the authoritative software validation lane
 2. do **not** block physical bring-up on a new U-Boot effort
-3. inventory and preserve the current Orange Pi 6 Plus ESP/boot artifacts
+3. refresh and extend the Orange Pi 6 Plus ESP/boot snapshot as needed
+   (`make orangepi6plus-efi-snapshot` for the working copy, then promote curated
+   results into `bootstrap/orangepi6plus/` when they matter)
 4. attempt Haiku physical boot through the existing EFI/GRUB path first
 5. only if that fails for structural reasons, branch into a dedicated repo-owned
    board bootloader workflow

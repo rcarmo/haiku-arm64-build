@@ -9,6 +9,7 @@ Use it together with:
 - `AGENTS.md`
 - `docs/boot-debug-notes-2026-04-23.md`
 - `docs/UBOOT-ASSESSMENT.md`
+- `bootstrap/orangepi6plus/host-efi-2026-04-27/README.md`
 
 ## Scope
 
@@ -96,6 +97,13 @@ Current probe expectations:
 - overlay probe logs:
   - `/workspace/tmp/haiku-overlay-probe/*.validate.log`
 
+### Physical boot baseline
+
+- pinned repo snapshot:
+  `/workspace/projects/haiku-build/bootstrap/orangepi6plus/host-efi-2026-04-27/`
+- refreshable working snapshot:
+  `/workspace/tmp/orangepi6plus-efi-snapshot/latest`
+
 ## What to run after each class of change
 
 ### If you change `scripts/fetch-latest-arm64-nightly.sh`
@@ -153,6 +161,26 @@ make desktop-probe-overlays
 ```
 
 and verify `summary.md` matches the intended expectation matrix.
+
+### If you change `scripts/snapshot-orangepi6plus-efi.sh` or physical boot assumptions
+
+Run:
+
+```sh
+make orangepi6plus-efi-snapshot
+```
+
+Then verify:
+
+- `/workspace/tmp/orangepi6plus-efi-snapshot/latest/METADATA.txt`
+- `/workspace/tmp/orangepi6plus-efi-snapshot/latest/SHA256SUMS`
+- `/workspace/tmp/orangepi6plus-efi-snapshot/latest/GRUB/GRUB.CFG`
+
+If the observed board boot surface changed materially, update:
+
+- `docs/UBOOT-ASSESSMENT.md`
+- `AGENTS.md`
+- the pinned repo baseline under `bootstrap/orangepi6plus/`
 
 ### If you change direct package contents or package metadata
 
