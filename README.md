@@ -24,9 +24,12 @@ The automation lane now also covers:
 _This screenshot shows the current validated boot lane with Tracker visible. The
 current image now uses the full direct `haiku.hpkg` package on a grown system
 partition and now rides on top of the newer rebootstrapped stock arm64
-nightly bootstrap package set. The current overlay is down to `expat_bootstrap`
-and `zstd_bootstrap`, while the older `compat_bootstrap_runtime` and repacked
-shell-package workarounds are no longer part of the default validated image._
+nightly bootstrap package set. The current overlay is now down to
+`zstd_bootstrap` only; the validated direct package also prunes the optional
+Cortex demo so it no longer needs `lib:libexpat` just to keep
+`/boot/system` solver-consistent. The older `compat_bootstrap_runtime` and
+repacked shell-package workarounds are no longer part of the default validated
+image._
 
 Directly validated in-guest:
 
@@ -100,8 +103,11 @@ Current defaults:
 - the generated direct `haiku.hpkg` contents
 - a grown system partition (currently 512 MiB)
 - the stock rebootstrapped arm64 nightly bootstrap package set from the base image
-- `expat_bootstrap-2.5.0-1-arm64.hpkg`
 - `zstd_bootstrap-1.5.6-1-arm64.hpkg`
+
+The validated direct package also prunes the optional `demos/Cortex` binary and
+its Deskbar symlink so the package no longer advertises a hard `lib:libexpat`
+requirement for desktop validation.
 
 For older base images, the script still has a legacy fallback path that injects
 `compat_bootstrap_runtime` plus sanitized bootstrap `bash`/`coreutils` packages.
@@ -141,6 +147,17 @@ It validates:
 - direct + `expat_bootstrap`
 - direct + `zstd_bootstrap`
 - direct + `zstd_bootstrap` + `expat_bootstrap`
+
+The current expected outcomes are:
+
+- `stock` → pass
+- `direct_only` → fail
+- `direct_plus_expat` → fail
+- `direct_plus_zstd` → pass
+- `direct_plus_zstd_expat` → pass
+
+This keeps `expat_bootstrap` in the probe as a control case even though it is no
+longer part of the default validated image.
 
 and writes both per-case validation logs and a Markdown/TSV summary under:
 
@@ -230,10 +247,13 @@ qemu-system-aarch64 \
 ## Current Caveats
 
 The direct package lane now validates end-to-end, but it is not fully de-hacked yet.
-The remaining deliberate shims in the current default validated lane are:
+The remaining deliberate shim in the current default validated lane is:
 
-- `expat_bootstrap-2.5.0-1-arm64.hpkg`
 - `zstd_bootstrap-1.5.6-1-arm64.hpkg`
+
+`expat_bootstrap` is no longer part of the default validated image. The current
+validated package instead prunes the optional Cortex demo to avoid carrying a
+package-level `lib:libexpat` dependency that only mattered for that demo.
 
 A legacy fallback path is still kept in the builder for older base images, where
 it can inject `compat_bootstrap_runtime` plus sanitized bootstrap shell packages.

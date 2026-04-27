@@ -722,17 +722,18 @@ Result:
 - Replacing only the stock `haiku` package with the locally built direct package fails immediately without extra help:
   - `runtime_loader: Cannot open file libzstd.so.1 ...`
 - Adding `zstd_bootstrap-1.5.6-1-arm64.hpkg` fixes that runtime failure.
-- With `zstd_bootstrap` but without `expat_bootstrap`, the system still reaches the desktop markers, but `package_daemon` reports `/boot/system` inconsistent because nothing provides `lib:libexpat` for the direct package.
-- With both `zstd_bootstrap` and `expat_bootstrap` added, the direct-package lane validates cleanly and `/boot/system` is consistent.
+- The remaining `lib:libexpat` inconsistency was traced to the optional `demos/Cortex` binary (plus its Deskbar symlink) in the validated direct package.
+- Pruning that demo from the validated direct-package image and dropping its `lib:libexpat` package-info requirement removes the need for `expat_bootstrap` in the modern default lane.
+- With that pruning in place, `direct_plus_zstd` validates cleanly and `/boot/system` is consistent.
+- `direct_plus_zstd_expat` also validates, confirming that the extra expat overlay is now unnecessary in the modern lane.
 - The older `compat_bootstrap_runtime` package is therefore no longer needed on this newer base image.
 - The older sanitized `bash_bootstrap` / `coreutils_bootstrap` injection path is also no longer needed on this newer base image.
 
 Interpretation:
 
 - The upstream rebootstrapped nightly base materially reduced the local overlay required for the validated lane.
-- On a current stock arm64 nightly base, the direct-package desktop lane now only needs:
-  - direct `haiku.hpkg`
-  - `expat_bootstrap`
+- On a current stock arm64 nightly base, the validated direct-package desktop lane now only needs:
+  - direct `haiku.hpkg` (with the optional Cortex demo pruned from the validated image package)
   - `zstd_bootstrap`
 - The heavier compatibility/runtime overlay is now only a legacy fallback for older base images.
 
@@ -804,7 +805,7 @@ Expected results encoded by the probe:
 - `stock` → pass
 - `direct_only` → fail
 - `direct_plus_expat` → fail
-- `direct_plus_zstd` → pass-with-issues (`lib:libexpat` still missing)
+- `direct_plus_zstd` → pass
 - `direct_plus_zstd_expat` → pass
 
 The probe writes per-case validate logs plus machine-readable summaries under:
@@ -829,7 +830,7 @@ Interpretation:
 4. **The harness is now authoritative for desktop readiness**
    - additive injection plus correct marker-path handling makes marker validation trustworthy.
 5. **Package composition still matters outside the main `haiku` package**
-   - on current `hrev59653`-style bases, the validated overlay has shrunk to `expat_bootstrap` and `zstd_bootstrap`; the older `compat_bootstrap_runtime` and sanitized shell-package path are only a legacy fallback for older base images.
+   - on current `hrev59653`-style bases, the validated overlay has now shrunk to `zstd_bootstrap` only; the earlier `lib:libexpat` issue came from the optional Cortex demo and is now avoided by pruning that demo from the validated package. The older `compat_bootstrap_runtime` and sanitized shell-package path are only a legacy fallback for older base images.
 6. **`env /system/boot/SetupEnvironment` crash was an ICU version collision**
    - this remains true and was the key to clearing the old `Thread 51` / `consoled -4` path.
 7. **`5059bc3bc8` and upstream `76e076b03b` are valid correctness fixes in the same area**
@@ -841,10 +842,11 @@ Interpretation:
 
 The current default validated lane still depends on:
 
-- `expat_bootstrap-2.5.0-1-arm64.hpkg`
 - `zstd_bootstrap-1.5.6-1-arm64.hpkg`
 
-These are no longer emergency diagnosis artifacts; they are the current known-good compatibility set for the direct-package desktop image on top of the newer stock arm64 nightly base.
+`expat_bootstrap-2.5.0-1-arm64.hpkg` is no longer part of the default validated image. The remaining `lib:libexpat` requirement was traced to the optional Cortex demo, so the validated package now prunes that demo instead of carrying the extra expat overlay.
+
+This remaining zstd package is no longer an emergency diagnosis artifact; it is the current known-good compatibility shim for the direct-package desktop image on top of the newer stock arm64 nightly base.
 
 For older base images, the builder still retains a legacy fallback path using:
 
@@ -854,13 +856,12 @@ For older base images, the builder still retains a legacy fallback path using:
 
 ## Immediate next steps
 
-1. Replace `expat_bootstrap` with the normal package path instead of the bootstrap package.
-2. Replace `zstd_bootstrap` with the normal package path or ensure the base image always carries it.
-3. Move the 512 MiB system-partition growth into the normal image build flow rather than post-processing the nightly base image.
-4. Re-check stock desktop boot behavior without harness-injected launch jobs, now that both the stock nightly and direct-package lane validate.
-5. Decide whether the legacy fallback path for older base images should remain or be retired.
-6. Continue tracking upstream arm64 package/repository progress so the local no-download fallback can eventually be retired.
-7. If the current overlay keeps shrinking, tighten the probe expectations and eventually collapse the matrix to the stock/direct delta that still matters.
+1. Replace `zstd_bootstrap` with the normal package path or ensure the base image always carries it.
+2. Move the 512 MiB system-partition growth into the normal image build flow rather than post-processing the nightly base image.
+3. Re-check stock desktop boot behavior without harness-injected launch jobs, now that both the stock nightly and direct-package lane validate.
+4. Decide whether the legacy fallback path for older base images should remain or be retired.
+5. Continue tracking upstream arm64 package/repository progress so the local no-download fallback can eventually be retired.
+6. Collapse the probe matrix once the extra `expat_bootstrap` control cases stop being useful.
 
 ## Reference log files (session)
 
