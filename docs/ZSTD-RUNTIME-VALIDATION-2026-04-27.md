@@ -16,6 +16,8 @@ current `zstd_bootstrap` overlay in validation.
 - a smaller local package was built from that payload:
   - `/workspace/tmp/zstd-runtime-proto/zstd_runtime-1.5.6-1-arm64.hpkg`
   - provides `lib:libzstd = 1.5.6 compat >= 1`
+- the checked-in builder now emits the same package shape under:
+  - `/workspace/tmp/haiku-build/validated/zstd_runtime-1.5.6-1-arm64.hpkg`
 
 ## Validation matrix
 
@@ -37,13 +39,15 @@ of the managed stock ARM64 nightly base image.
 - the direct-package desktop lane does **not** require the full broader
   `zstd_bootstrap` package payload for validation; it only needs a package that
   satisfies `lib:libzstd`
-- the builder still defaults to `zstd_bootstrap` today, but the repo now has a
-  validated smaller replacement candidate
+- the checked-in builder and probe now default to the smaller generated
+  `zstd_runtime` package
 
 ## Artifact paths
 
 - prototype package:
   `/workspace/tmp/zstd-runtime-proto/zstd_runtime-1.5.6-1-arm64.hpkg`
+- generated default package:
+  `/workspace/tmp/haiku-build/validated/zstd_runtime-1.5.6-1-arm64.hpkg`
 - focused validation stdout captures:
   - `/workspace/tmp/zstd-runtime-manual/stock.stdout`
   - `/workspace/tmp/zstd-runtime-manual/direct_only.stdout`
@@ -55,4 +59,5 @@ of the managed stock ARM64 nightly base image.
 
 The modern ARM64 direct desktop lane is blocked by missing `libzstd.so.1`, not
 by `expat`. A minimal runtime-only replacement has now been validated locally,
-even though the checked-in builder still points at `zstd_bootstrap` by default.
+and the checked-in builder/probe now use that smaller generated package by
+default.

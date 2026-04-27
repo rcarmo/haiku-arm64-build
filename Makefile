@@ -16,6 +16,7 @@ DESKTOP_TMUX_SESSION := haiku-desktop
 DESKTOP_STATE_FILE := $(DESKTOP_HARNESS_DIR)/$(DESKTOP_TMUX_SESSION).state
 DESKTOP_MONITOR_SOCKET := $(DESKTOP_HARNESS_DIR)/$(DESKTOP_TMUX_SESSION).monitor.sock
 DESKTOP_SCREENSHOT := $(DESKTOP_HARNESS_DIR)/$(DESKTOP_TMUX_SESSION).ppm
+DESKTOP_VALIDATE_TIMEOUT_SECS := 900
 ORANGEPI6PLUS_EFI_SNAPSHOT_DIR := /workspace/tmp/orangepi6plus-efi-snapshot/latest
 ORANGEPI6PLUS_EFI_ESP_DEV := /dev/nvme0n1p1
 
@@ -226,7 +227,7 @@ desktop-screenshot:
 
 desktop-validate:
 	@chmod +x $(CURDIR)/scripts/qemu-desktop-harness.sh
-	$(CURDIR)/scripts/qemu-desktop-harness.sh validate --image "$(DESKTOP_VALIDATE_IMAGE)"
+	$(CURDIR)/scripts/qemu-desktop-harness.sh validate --timeout "$(DESKTOP_VALIDATE_TIMEOUT_SECS)" --image "$(DESKTOP_VALIDATE_IMAGE)"
 
 orangepi6plus-efi-snapshot:
 	@chmod +x $(CURDIR)/scripts/snapshot-orangepi6plus-efi.sh

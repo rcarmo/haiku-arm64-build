@@ -734,7 +734,7 @@ Interpretation:
 - The upstream rebootstrapped nightly base materially reduced the local overlay required for the validated lane.
 - On a current stock arm64 nightly base, the validated direct-package desktop lane now only needs:
   - direct `haiku.hpkg` (with the optional Cortex demo pruned from the validated image package)
-  - `zstd_bootstrap`
+  - a generated local `zstd_runtime` package
 - The heavier compatibility/runtime overlay is now only a legacy fallback for older base images.
 
 ---
@@ -845,7 +845,7 @@ Result:
 
 - `scripts/build-validated-desktop-image.sh` now prunes the optional Cortex demo
   from the validated direct package image
-- the modern default validated overlay is now just `zstd_bootstrap`
+- the modern default validated overlay is now the generated local `zstd_runtime` package
 - `make desktop-image`, `make desktop-validate`, and
   `make desktop-probe-overlays` all revalidated with the new expectation matrix
 
@@ -867,7 +867,7 @@ Interpretation:
 4. **The harness is now authoritative for desktop readiness**
    - additive injection plus correct marker-path handling makes marker validation trustworthy.
 5. **Package composition still matters outside the main `haiku` package**
-   - on current `hrev59653`-style bases, the validated overlay has now shrunk to `zstd_bootstrap` only; the earlier `lib:libexpat` issue came from the optional Cortex demo and is now avoided by pruning that demo from the validated package. The older `compat_bootstrap_runtime` and sanitized shell-package path are only a legacy fallback for older base images.
+   - on current stock bases, the validated overlay has now shrunk to a generated local `zstd_runtime` package only; the earlier `lib:libexpat` issue came from the optional Cortex demo and is now avoided by pruning that demo from the validated package. The older `compat_bootstrap_runtime` and sanitized shell-package path are only a legacy fallback for older base images.
 6. **`env /system/boot/SetupEnvironment` crash was an ICU version collision**
    - this remains true and was the key to clearing the old `Thread 51` / `consoled -4` path.
 7. **`5059bc3bc8` and upstream `76e076b03b` are valid correctness fixes in the same area**
@@ -879,7 +879,7 @@ Interpretation:
 
 The current default validated lane still depends on:
 
-- `zstd_bootstrap-1.5.6-1-arm64.hpkg`
+- `/workspace/tmp/haiku-build/validated/zstd_runtime-1.5.6-1-arm64.hpkg`
 
 `expat_bootstrap-2.5.0-1-arm64.hpkg` is no longer part of the default validated image. The remaining `lib:libexpat` requirement was traced to the optional Cortex demo, so the validated package now prunes that demo instead of carrying the extra expat overlay.
 
@@ -892,9 +892,11 @@ cleanly:
 
 - `/workspace/tmp/zstd-runtime-proto/zstd_runtime-1.5.6-1-arm64.hpkg`
 
-That prototype is not yet wired into the default builder path, but it narrows
-the actual requirement further: the modern lane needs a provider for
-`lib:libzstd`, not necessarily the full broader `zstd_bootstrap` package.
+That prototype has now been wired into the default builder path as a generated
+`/workspace/tmp/haiku-build/validated/zstd_runtime-1.5.6-1-arm64.hpkg`
+artifact, which narrows the actual requirement further: the modern lane needs a
+provider for `lib:libzstd`, not necessarily the full broader
+`zstd_bootstrap` package.
 
 For older base images, the builder still retains a legacy fallback path using:
 
@@ -904,7 +906,7 @@ For older base images, the builder still retains a legacy fallback path using:
 
 ## Immediate next steps
 
-1. Decide whether to formalize the smaller local `zstd_runtime` replacement in the builder, or instead wait for the normal package path / stock base image to carry `libzstd.so.1` directly.
+1. Replace the remaining local `zstd_runtime` generation step once the normal package path or stock base image carries `libzstd.so.1` directly.
 2. Move the 512 MiB system-partition growth into the normal image build flow rather than post-processing the nightly base image.
 3. Re-check stock desktop boot behavior without harness-injected launch jobs, now that both the stock nightly and direct-package lane validate.
 4. Decide whether the legacy fallback path for older base images should remain or be retired.

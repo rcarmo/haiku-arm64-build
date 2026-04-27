@@ -97,7 +97,7 @@ As of 2026-04-27:
 - the direct-package desktop lane validates in QEMU
 - the default modern validated overlay is:
   - direct `haiku.hpkg`
-  - `zstd_bootstrap-1.5.6-1-arm64.hpkg`
+  - `/workspace/tmp/haiku-build/validated/zstd_runtime-1.5.6-1-arm64.hpkg`
 - `expat_bootstrap` is no longer part of the default validated image
 - the validated direct package now prunes:
   - `demos/Cortex`
@@ -105,10 +105,9 @@ As of 2026-04-27:
 - the remaining blocker is `libzstd.so.1`
 - the locally available normal `zstd-1.5.6-1-arm64.hpkg` is currently a stub and
   does not provide the runtime library
-- a smaller local prototype replacement,
-  `/workspace/tmp/zstd-runtime-proto/zstd_runtime-1.5.6-1-arm64.hpkg`, also
-  validates cleanly as a `lib:libzstd` provider, but is not yet the default
-  builder input
+- the builder now emits the smaller local `zstd_runtime` package from the
+  `zstd_bootstrap` shared-library payload so the default lane only carries the
+  narrower `lib:libzstd` provider it still needs
 
 Current overlay probe expectations:
 
@@ -130,7 +129,7 @@ Current overlay probe expectations:
 - `/workspace/tmp/haiku-build/validated/haiku-arm64-icu74-desktop.boot.img`
 - `/workspace/tmp/haiku-build/validated/haiku-direct-icu74.hpkg`
 - `/workspace/tmp/haiku-build/validated/compat_bootstrap_runtime-1-2-arm64.hpkg`
-- `/workspace/tmp/zstd-runtime-proto/zstd_runtime-1.5.6-1-arm64.hpkg`
+- `/workspace/tmp/haiku-build/validated/zstd_runtime-1.5.6-1-arm64.hpkg`
 
 ### Logs / validation products
 
@@ -236,8 +235,9 @@ Also keep the local workspace note aligned:
 
 - the QEMU lane is authoritative today; physical board boot is not yet the main lane
 - the repo still keeps a legacy fallback path for older base images
-- `zstd_bootstrap` remains the modern default lane input today, though a smaller
-  `zstd_runtime` replacement candidate has now been validated locally
+- a generated local `zstd_runtime` package is now the modern default lane input
+- that package is still a local shim until the stock or normal arm64 package
+  path grows a real `libzstd` provider
 - `HAIKU_NO_DOWNLOADS=1` local fallback behavior still matters because the newer
   full upstream arm64 package set is not yet fully available locally
 
@@ -283,8 +283,8 @@ Orange Pi 6 Plus Haiku boot path exists.
 
 ## Maintainer priorities
 
-1. remove or replace the remaining `zstd_bootstrap` dependency
-   (a smaller `zstd_runtime` replacement candidate is now validated locally)
+1. remove or replace the remaining local `zstd_runtime` generation step
+   by getting a real `libzstd` provider into the stock or normal arm64 package path
 2. collapse unnecessary control cases from the overlay probe
 3. decide when to retire the legacy fallback path
 4. only then push deeper into physical Orange Pi 6 Plus bring-up
