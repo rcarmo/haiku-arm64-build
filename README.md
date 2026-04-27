@@ -7,7 +7,7 @@
 
 Reproducible build setup for Haiku OS ARM64 on Orange Pi 6 Plus.
 
-## Status: Boots to Desktop from the Full Direct Package Lane (2026-04-26)
+## Status: Boots to Desktop from the Full Direct Package Lane (2026-04-27)
 
 Haiku ARM64 now **boots to a desktop session in QEMU** from the validated
 full direct-package lane. The kernel loads, BFS mounts, `launch_daemon` starts,
@@ -18,6 +18,13 @@ Latest reduction (2026-04-27): the default validated overlay dropped
 `expat_bootstrap`. The validated direct package now prunes the optional Cortex
 demo and its Deskbar entry, so the modern default overlay is down to
 `zstd_bootstrap` only.
+
+Focused follow-up validation on 2026-04-27 also confirmed that the normal local
+ARM64 `zstd-1.5.6-1-arm64.hpkg` is still only a stub package, while a minimal
+local `zstd_runtime-1.5.6-1-arm64.hpkg` built from the `zstd_bootstrap` library
+payload validates cleanly as a replacement candidate. The current checked-in
+builder still points at `zstd_bootstrap`, but the remaining requirement is now
+known to be the shared zstd runtime itself, not the broader bootstrap package.
 
 The automation lane now also covers:
 
@@ -58,6 +65,8 @@ Confirmed causes of prior boot failures, in resolution order:
    (icu-67.1 + ICU74 coexistence); resolved by using an ICU74-consistent package set
 
 Detailed experiment matrix: [`docs/boot-debug-notes-2026-04-23.md`](docs/boot-debug-notes-2026-04-23.md)
+
+Focused zstd follow-up: [`docs/ZSTD-RUNTIME-VALIDATION-2026-04-27.md`](docs/ZSTD-RUNTIME-VALIDATION-2026-04-27.md)
 
 Maintainer docs:
 
@@ -115,6 +124,7 @@ Current defaults:
 - built desktop image: `/workspace/tmp/haiku-build/validated/haiku-arm64-icu74-desktop.boot.img`
 - direct package: `/workspace/tmp/haiku-build/validated/haiku-direct-icu74.hpkg`
 - compat package artifact (legacy fallback only): `/workspace/tmp/haiku-build/validated/compat_bootstrap_runtime-1-2-arm64.hpkg`
+- prototype zstd runtime replacement: `/workspace/tmp/zstd-runtime-proto/zstd_runtime-1.5.6-1-arm64.hpkg`
 - graphical run image: same as above
 - validation image: same as above
 
@@ -124,6 +134,11 @@ Current defaults:
 - a grown system partition (currently 512 MiB)
 - the stock rebootstrapped arm64 nightly bootstrap package set from the base image
 - `zstd_bootstrap-1.5.6-1-arm64.hpkg`
+
+A focused 2026-04-27 follow-up also validated a smaller replacement candidate,
+`/workspace/tmp/zstd-runtime-proto/zstd_runtime-1.5.6-1-arm64.hpkg`, which
+satisfies `lib:libzstd` without carrying the wider bootstrap package payload.
+That artifact is not yet the default builder input.
 
 The validated direct package also prunes the optional `demos/Cortex` binary and
 its Deskbar symlink so the package no longer advertises a hard `lib:libexpat`
@@ -178,6 +193,11 @@ The current expected outcomes are:
 
 This keeps `expat_bootstrap` in the probe as a control case even though it is no
 longer part of the default validated image.
+
+The checked-in probe still defaults `ZSTD_HPKG` to `zstd_bootstrap`, but the
+2026-04-27 focused validation note confirms the same pass/fail split with a
+smaller runtime-only replacement package that simply provides `lib:libzstd`:
+[`docs/ZSTD-RUNTIME-VALIDATION-2026-04-27.md`](docs/ZSTD-RUNTIME-VALIDATION-2026-04-27.md).
 
 and writes both per-case validation logs and a Markdown/TSV summary under:
 
@@ -279,6 +299,10 @@ The remaining deliberate shim in the current default validated lane is:
 
 - `zstd_bootstrap-1.5.6-1-arm64.hpkg`
 
+A smaller local replacement candidate has now also been validated:
+
+- `/workspace/tmp/zstd-runtime-proto/zstd_runtime-1.5.6-1-arm64.hpkg`
+
 `expat_bootstrap` is no longer part of the default validated image. The current
 validated package instead prunes the optional Cortex demo to avoid carrying a
 package-level `lib:libexpat` dependency that only mattered for that demo.
@@ -288,11 +312,16 @@ The remaining zstd issue is currently structural, not just documentation debt:
 - the stock `hrev59653`-class nightly base still does not carry `libzstd.so.1`
 - the locally available normal `zstd-1.5.6-1-arm64.hpkg` is only a stub package
   and does **not** provide the shared library
-- so the validated direct lane still needs `zstd_bootstrap` until either the
-  stock base or the normal arm64 package set changes
+- so the validated direct lane still needs either `zstd_bootstrap` or another
+  package that provides `lib:libzstd` until the stock base or the normal arm64
+  package set changes
 
 A legacy fallback path is still kept in the builder for older base images, where
 it can inject `compat_bootstrap_runtime` plus sanitized bootstrap shell packages.
+
+For the current modern lane, the open decision is whether to formalize the new
+smaller `zstd_runtime` replacement in the builder or simply wait for the stock
+base / normal arm64 package set to grow a proper `libzstd` provider.
 
 The `haiku/` branch `arm64-bootstrap-fixes` also now includes a merge of current
 `upstream/master`, but still keeps an arm64 `HAIKU_NO_DOWNLOADS=1` fallback to
