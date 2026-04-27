@@ -56,6 +56,12 @@ Confirmed causes of prior boot failures, in resolution order:
 
 Detailed experiment matrix: [`docs/boot-debug-notes-2026-04-23.md`](docs/boot-debug-notes-2026-04-23.md)
 
+Maintainer docs:
+
+- [`docs/MAINTAINER-CHECKLIST.md`](docs/MAINTAINER-CHECKLIST.md)
+- [`docs/UBOOT-ASSESSMENT.md`](docs/UBOOT-ASSESSMENT.md)
+- [`AGENTS.md`](AGENTS.md)
+
 ## Quick Start
 
 ```sh
@@ -214,6 +220,10 @@ Current local hardware profile:
 This host is used for reproducible builds today and is also the most practical
 local board target for future non-QEMU bring-up once the automated QEMU lane is
 fully pared down.
+
+For the current physical bootloader strategy assessment, see:
+
+- [`docs/UBOOT-ASSESSMENT.md`](docs/UBOOT-ASSESSMENT.md)
 
 ## QEMU Boot (working)
 
