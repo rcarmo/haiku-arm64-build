@@ -11,6 +11,11 @@ full direct-package lane. The kernel loads, BFS mounts, `launch_daemon` starts,
 `package_daemon` reports `/boot/system` consistent, and the desktop user-session
 comes up far enough to launch `app_server`, `Tracker`, and `Deskbar`.
 
+Latest reduction (2026-04-27): the default validated overlay dropped
+`expat_bootstrap`. The validated direct package now prunes the optional Cortex
+demo and its Deskbar entry, so the modern default overlay is down to
+`zstd_bootstrap` only.
+
 The automation lane now also covers:
 
 - syncing the latest stock ARM64 nightly base image
@@ -254,6 +259,14 @@ The remaining deliberate shim in the current default validated lane is:
 `expat_bootstrap` is no longer part of the default validated image. The current
 validated package instead prunes the optional Cortex demo to avoid carrying a
 package-level `lib:libexpat` dependency that only mattered for that demo.
+
+The remaining zstd issue is currently structural, not just documentation debt:
+
+- the stock `hrev59653`-class nightly base still does not carry `libzstd.so.1`
+- the locally available normal `zstd-1.5.6-1-arm64.hpkg` is only a stub package
+  and does **not** provide the shared library
+- so the validated direct lane still needs `zstd_bootstrap` until either the
+  stock base or the normal arm64 package set changes
 
 A legacy fallback path is still kept in the builder for older base images, where
 it can inject `compat_bootstrap_runtime` plus sanitized bootstrap shell packages.

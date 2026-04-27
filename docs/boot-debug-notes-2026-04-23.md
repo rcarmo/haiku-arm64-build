@@ -819,6 +819,43 @@ Interpretation:
 - overlay minimization is now re-runnable instead of living only in shell history
 - regressions in the stock nightly or direct overlay assumptions can now be detected with one command
 
+---
+
+### Case AK: drop `expat_bootstrap` from the modern default overlay
+
+The next cleanup pass re-checked what still actually required `lib:libexpat` in
+the validated direct package.
+
+Findings:
+
+- `readelf -d` over the staged direct package contents showed `libexpat.so.1`
+  only on `demos/Cortex` (and its Deskbar symlink target), while `libbe.so`
+  still depended on `libzstd.so.1`
+- a temporary direct package rebuilt without `demos/Cortex`, its Deskbar menu
+  symlink, and the package-level `lib:libexpat` requirement validated cleanly in
+  the `direct_plus_zstd` probe case
+- `direct_plus_zstd_expat` also still validated, showing the extra expat overlay
+  had become redundant in the modern lane
+- the stock nightly base package set still lacked `libzstd.so.1`
+- the locally available normal `zstd-1.5.6-1-arm64.hpkg` was only a stub package
+  and did not provide the shared library, so it could not replace
+  `zstd_bootstrap`
+
+Result:
+
+- `scripts/build-validated-desktop-image.sh` now prunes the optional Cortex demo
+  from the validated direct package image
+- the modern default validated overlay is now just `zstd_bootstrap`
+- `make desktop-image`, `make desktop-validate`, and
+  `make desktop-probe-overlays` all revalidated with the new expectation matrix
+
+Interpretation:
+
+- `expat_bootstrap` was a real intermediate compatibility step, but not a final
+  requirement of the modern validated lane
+- the remaining blocker is now clearly `libzstd.so.1` availability in the stock
+  base / normal arm64 package path
+
 ## Working conclusions
 
 1. **The direct regular package path is now real**
