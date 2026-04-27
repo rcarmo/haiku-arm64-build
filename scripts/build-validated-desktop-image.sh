@@ -12,7 +12,6 @@ BASE_IMAGE=${BASE_IMAGE:-/workspace/tmp/haiku-nightly-arm64/haiku-master-arm64-c
 DIRECT_HAIKU_HPKG=${DIRECT_HAIKU_HPKG:-$BUILD_DIR/objects/haiku/arm64/packaging/packages/haiku.hpkg}
 DIRECT_HAIKU_CONTENTS_DIR=${DIRECT_HAIKU_CONTENTS_DIR:-$BUILD_DIR/objects/haiku/arm64/packaging/packages_build/regular/hpkg_-haiku.hpkg/contents}
 DIRECT_HAIKU_PACKAGE_INFO=${DIRECT_HAIKU_PACKAGE_INFO:-$BUILD_DIR/objects/haiku/arm64/packaging/packages_build/regular/hpkg_-haiku.hpkg/haiku-package-info}
-EXPAT_HPKG=${EXPAT_HPKG:-$BUILD_DIR/objects/haiku/arm64/packaging/repositories/HaikuPortsCross-build/packages/expat_bootstrap-2.5.0-1-arm64.hpkg}
 ZSTD_HPKG=${ZSTD_HPKG:-$BUILD_DIR/objects/haiku/arm64/packaging/repositories/HaikuPortsCross-build/packages/zstd_bootstrap-1.5.6-1-arm64.hpkg}
 BASH_HPKG=${BASH_HPKG:-$BUILD_DIR/objects/haiku/arm64/packaging/repositories/HaikuPortsCross-build/packages/bash_bootstrap-4.4.023-1-arm64.hpkg}
 COREUTILS_HPKG=${COREUTILS_HPKG:-$BUILD_DIR/objects/haiku/arm64/packaging/repositories/HaikuPortsCross-build/packages/coreutils_bootstrap-9.9-1-arm64.hpkg}
@@ -45,13 +44,15 @@ Current default base image:
     (managed by scripts/fetch-latest-arm64-nightly.sh)
 
 Package overlay behavior:
-  - modern rebootstrapped nightly base: add direct haiku + zstd_bootstrap + expat_bootstrap
-  - legacy base: add direct haiku + compat_bootstrap_runtime + expat_bootstrap
+  - modern rebootstrapped nightly base: add direct haiku + zstd_bootstrap
+  - legacy base: add direct haiku + compat_bootstrap_runtime
     + sanitized bash/coreutils bootstrap packages
+  - the validated direct package prunes the optional Cortex demo so it no longer
+    needs libexpat just to keep /boot/system solver-consistent
 
 Environment overrides:
   BASE_IMAGE, DIRECT_HAIKU_HPKG, DIRECT_HAIKU_CONTENTS_DIR,
-  DIRECT_HAIKU_PACKAGE_INFO, EXPAT_HPKG, ZSTD_HPKG, BASH_HPKG,
+  DIRECT_HAIKU_PACKAGE_INFO, ZSTD_HPKG, BASH_HPKG,
   COREUTILS_HPKG, OUTPUT_DIR, OUTPUT_IMAGE, OUTPUT_HAIKU_HPKG,
   OUTPUT_COMPAT_HPKG, BUILD_DIR, PACKAGE_TOOL, BFS_SHELL, BFS_FUSE,
   SYSTEM_PARTITION_MIB
@@ -94,7 +95,6 @@ require_file "$BASE_IMAGE"
 require_file "$DIRECT_HAIKU_HPKG"
 require_file "$DIRECT_HAIKU_PACKAGE_INFO"
 [[ -d "$DIRECT_HAIKU_CONTENTS_DIR" ]] || { echo "missing dir: $DIRECT_HAIKU_CONTENTS_DIR" >&2; exit 1; }
-require_file "$EXPAT_HPKG"
 require_file "$ZSTD_HPKG"
 require_file "$BASH_HPKG"
 require_file "$COREUTILS_HPKG"
@@ -192,6 +192,8 @@ create_haiku_package() {
   mkdir -p "$stage_dir"
   cp -a "$DIRECT_HAIKU_CONTENTS_DIR/." "$stage_dir/"
 
+  rm -f "$stage_dir/demos/Cortex" "$stage_dir/data/deskbar/menu/Demos/Cortex"
+
   cp "$DIRECT_HAIKU_PACKAGE_INFO" "$package_info_copy"
   python3 - "$package_info_copy" <<'PY'
 from pathlib import Path
@@ -206,6 +208,7 @@ remove = {
     'cmd:gunzip',
     'cmd:tar',
     'cmd:unzip',
+    'lib:libexpat',
 }
 lines = p.read_text().splitlines()
 filtered = [line for line in lines if line.strip() not in remove]
@@ -319,7 +322,6 @@ PY
     rm -f "$pkgdir/bash_bootstrap-4.4.023-1-arm64.hpkg" \
           "$pkgdir/coreutils_bootstrap-9.9-1-arm64.hpkg"
     cp "$OUTPUT_HAIKU_HPKG" "$pkgdir/$(basename "$OUTPUT_HAIKU_HPKG")"
-    cp "$EXPAT_HPKG" "$pkgdir/"
     cp "$ZSTD_HPKG" "$pkgdir/"
   else
     rm -f "$pkgdir/gcc_syslibs-13.2.0_2023_08_10-1-arm64.hpkg" \
@@ -332,7 +334,6 @@ PY
 
     cp "$OUTPUT_HAIKU_HPKG" "$pkgdir/$(basename "$OUTPUT_HAIKU_HPKG")"
     cp "$OUTPUT_COMPAT_HPKG" "$pkgdir/compat_bootstrap_runtime-1-2-arm64.hpkg"
-    cp "$EXPAT_HPKG" "$pkgdir/"
     cp "$EFFECTIVE_BASH_HPKG" "$pkgdir/"
     cp "$COREUTILS_HPKG" "$pkgdir/"
   fi

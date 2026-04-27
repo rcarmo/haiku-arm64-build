@@ -30,6 +30,10 @@ Cases:
 The script validates each case with qemu-desktop-harness.sh, writes per-case logs,
 and generates summary.md + summary.tsv in the output directory.
 
+The validated direct package currently prunes the optional Cortex demo so the
+probe can distinguish the remaining mandatory zstd dependency from the now-
+removed libexpat package-level dependency.
+
 Environment overrides:
   BASE_IMAGE, DIRECT_HAIKU_HPKG, EXPAT_HPKG, ZSTD_HPKG, HARNESS,
   OUTPUT_DIR, BUILD_DIR, BFS_FUSE, TIMEOUT_SECS, KEEP_IMAGES
@@ -232,7 +236,7 @@ FAILURES=0
 validate_case stock "$BASE_IMAGE" pass || FAILURES=$((FAILURES + 1))
 validate_case direct_only "$(prepare_overlay_case direct_only 0 0)" fail || FAILURES=$((FAILURES + 1))
 validate_case direct_plus_expat "$(prepare_overlay_case direct_plus_expat 1 0)" fail || FAILURES=$((FAILURES + 1))
-validate_case direct_plus_zstd "$(prepare_overlay_case direct_plus_zstd 0 1)" pass-with-issues || FAILURES=$((FAILURES + 1))
+validate_case direct_plus_zstd "$(prepare_overlay_case direct_plus_zstd 0 1)" pass || FAILURES=$((FAILURES + 1))
 validate_case direct_plus_zstd_expat "$(prepare_overlay_case direct_plus_zstd_expat 1 1)" pass || FAILURES=$((FAILURES + 1))
 
 if (( KEEP_IMAGES == 0 )); then
@@ -245,8 +249,8 @@ cat <<EOF >> "$SUMMARY_MD"
 
 - \`stock\` should already validate on the newer rebootstrapped arm64 nightly.
 - \`direct_only\` and \`direct_plus_expat\` should fail because the direct package still needs \`libzstd.so.1\`.
-- \`direct_plus_zstd\` should reach the desktop but leave \`/boot/system\` inconsistent due missing \`lib:libexpat\`.
-- \`direct_plus_zstd_expat\` should validate cleanly and is the current known-good minimal overlay.
+- \`direct_plus_zstd\` should now validate cleanly: the validated direct package prunes the optional Cortex demo and no longer requires \`lib:libexpat\`.
+- \`direct_plus_zstd_expat\` should also validate cleanly, but the extra expat overlay is now expected to be unnecessary.
 EOF
 
 cat "$SUMMARY_MD"
