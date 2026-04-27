@@ -1,5 +1,8 @@
 # Haiku ARM64 Build Environment
 
+> [!IMPORTANT]
+> **Disclaimer:** this is not an official effort to get Haiku up and running on Orange Pi hardware — this is a personal effort, and judging by [the Haiku project's reaction](https://discuss.haiku-os.org/t/my-haiku-arm64-progress/19044/19), it will remain just that. After this scaffolding is finished and I have [`rcarmo/9front`](https://github.com/rcarmo/9front) booting on the target hardware, I will try to build an equivalent U-Boot path for Haiku and publish it as MIT — and if nobody takes it, that is perfectly fine with me.
+
 ![Haiku ARM64 Build icon](docs/icon-256.png)
 
 Reproducible build setup for Haiku OS ARM64 on Orange Pi 6 Plus.
@@ -62,6 +65,10 @@ Maintainer docs:
 - [`docs/UBOOT-ASSESSMENT.md`](docs/UBOOT-ASSESSMENT.md)
 - [`AGENTS.md`](AGENTS.md)
 
+Boot-surface baseline now checked into the repo:
+
+- [`bootstrap/orangepi6plus/host-efi-2026-04-27/`](bootstrap/orangepi6plus/host-efi-2026-04-27/)
+
 ## Quick Start
 
 ```sh
@@ -91,6 +98,7 @@ make desktop-attach      # attach to the tmux session
 make desktop-screenshot  # save a framebuffer screenshot from the detached run
 make desktop-stop        # stop the detached tmux session
 make desktop-validate    # headless validation using injected marker jobs
+make orangepi6plus-efi-snapshot # snapshot the current host EFI/GRUB boot surface
 ```
 
 Key automation scripts:
@@ -99,6 +107,7 @@ Key automation scripts:
 - `scripts/build-validated-desktop-image.sh`
 - `scripts/probe-direct-package-overlays.sh`
 - `scripts/qemu-desktop-harness.sh`
+- `scripts/snapshot-orangepi6plus-efi.sh`
 
 Current defaults:
 
@@ -224,6 +233,10 @@ fully pared down.
 For the current physical bootloader strategy assessment, see:
 
 - [`docs/UBOOT-ASSESSMENT.md`](docs/UBOOT-ASSESSMENT.md)
+
+The current pinned Orange Pi 6 Plus EFI/GRUB snapshot is under:
+
+- [`bootstrap/orangepi6plus/host-efi-2026-04-27/`](bootstrap/orangepi6plus/host-efi-2026-04-27/)
 
 ## QEMU Boot (working)
 
