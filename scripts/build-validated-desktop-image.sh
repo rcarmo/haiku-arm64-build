@@ -12,10 +12,12 @@ BASE_IMAGE=${BASE_IMAGE:-/workspace/tmp/haiku-nightly-arm64/haiku-master-arm64-c
 DIRECT_HAIKU_HPKG=${DIRECT_HAIKU_HPKG:-$BUILD_DIR/objects/haiku/arm64/packaging/packages/haiku.hpkg}
 DIRECT_HAIKU_CONTENTS_DIR=${DIRECT_HAIKU_CONTENTS_DIR:-$BUILD_DIR/objects/haiku/arm64/packaging/packages_build/regular/hpkg_-haiku.hpkg/contents}
 DIRECT_HAIKU_PACKAGE_INFO=${DIRECT_HAIKU_PACKAGE_INFO:-$BUILD_DIR/objects/haiku/arm64/packaging/packages_build/regular/hpkg_-haiku.hpkg/haiku-package-info}
-ZSTD_HPKG=${ZSTD_HPKG:-$BUILD_DIR/objects/haiku/arm64/packaging/repositories/HaikuPortsCross-build/packages/zstd_bootstrap-1.5.6-1-arm64.hpkg}
+OUTPUT_DIR=${OUTPUT_DIR:-/workspace/tmp/haiku-build/validated}
+ZSTD_SOURCE_HPKG=${ZSTD_SOURCE_HPKG:-$BUILD_DIR/objects/haiku/arm64/packaging/repositories/HaikuPortsCross-build/packages/zstd_bootstrap-1.5.6-1-arm64.hpkg}
+DEFAULT_OUTPUT_ZSTD_HPKG=$OUTPUT_DIR/zstd_runtime-1.5.6-1-arm64.hpkg
+ZSTD_HPKG=${ZSTD_HPKG:-$DEFAULT_OUTPUT_ZSTD_HPKG}
 BASH_HPKG=${BASH_HPKG:-$BUILD_DIR/objects/haiku/arm64/packaging/repositories/HaikuPortsCross-build/packages/bash_bootstrap-4.4.023-1-arm64.hpkg}
 COREUTILS_HPKG=${COREUTILS_HPKG:-$BUILD_DIR/objects/haiku/arm64/packaging/repositories/HaikuPortsCross-build/packages/coreutils_bootstrap-9.9-1-arm64.hpkg}
-OUTPUT_DIR=${OUTPUT_DIR:-/workspace/tmp/haiku-build/validated}
 OUTPUT_IMAGE=${OUTPUT_IMAGE:-$OUTPUT_DIR/haiku-arm64-icu74-desktop.boot.img}
 OUTPUT_HAIKU_HPKG=${OUTPUT_HAIKU_HPKG:-$OUTPUT_DIR/haiku-direct-icu74.hpkg}
 OUTPUT_COMPAT_HPKG=${OUTPUT_COMPAT_HPKG:-$OUTPUT_DIR/compat_bootstrap_runtime-1-2-arm64.hpkg}
@@ -44,7 +46,8 @@ Current default base image:
     (managed by scripts/fetch-latest-arm64-nightly.sh)
 
 Package overlay behavior:
-  - modern rebootstrapped nightly base: add direct haiku + zstd_bootstrap
+  - modern rebootstrapped nightly base: add direct haiku + zstd_runtime
+    (generated locally from zstd_bootstrap's shared-library payload)
   - legacy base: add direct haiku + compat_bootstrap_runtime
     + sanitized bash/coreutils bootstrap packages
   - the validated direct package prunes the optional Cortex demo so it no longer
@@ -52,7 +55,7 @@ Package overlay behavior:
 
 Environment overrides:
   BASE_IMAGE, DIRECT_HAIKU_HPKG, DIRECT_HAIKU_CONTENTS_DIR,
-  DIRECT_HAIKU_PACKAGE_INFO, ZSTD_HPKG, BASH_HPKG,
+  DIRECT_HAIKU_PACKAGE_INFO, ZSTD_SOURCE_HPKG, ZSTD_HPKG, BASH_HPKG,
   COREUTILS_HPKG, OUTPUT_DIR, OUTPUT_IMAGE, OUTPUT_HAIKU_HPKG,
   OUTPUT_COMPAT_HPKG, BUILD_DIR, PACKAGE_TOOL, BFS_SHELL, BFS_FUSE,
   SYSTEM_PARTITION_MIB
@@ -95,9 +98,14 @@ require_file "$BASE_IMAGE"
 require_file "$DIRECT_HAIKU_HPKG"
 require_file "$DIRECT_HAIKU_PACKAGE_INFO"
 [[ -d "$DIRECT_HAIKU_CONTENTS_DIR" ]] || { echo "missing dir: $DIRECT_HAIKU_CONTENTS_DIR" >&2; exit 1; }
-require_file "$ZSTD_HPKG"
 require_file "$BASH_HPKG"
 require_file "$COREUTILS_HPKG"
+
+if [[ "$ZSTD_HPKG" == "$DEFAULT_OUTPUT_ZSTD_HPKG" ]]; then
+  require_file "$ZSTD_SOURCE_HPKG"
+else
+  require_file "$ZSTD_HPKG"
+fi
 
 EFFECTIVE_BASH_HPKG="$BASH_HPKG"
 
@@ -137,6 +145,49 @@ PY
 }
 
 sanitize_bash_package_if_needed
+
+create_zstd_runtime_package() {
+  local inspect_dir="$WORK_DIR/zstd-runtime-inspect"
+  local stage_dir="$WORK_DIR/zstd-runtime-stage"
+  local package_info="$WORK_DIR/zstd-runtime.PackageInfo"
+  local source_version source_version_base
+
+  rm -rf "$inspect_dir" "$stage_dir"
+  mkdir -p "$inspect_dir" "$stage_dir/lib"
+  "$PACKAGE_TOOL" extract -C "$inspect_dir" "$ZSTD_SOURCE_HPKG" >/dev/null
+
+  compgen -G "$inspect_dir/lib/libzstd.so*" >/dev/null \
+    || { echo "missing libzstd payload in $ZSTD_SOURCE_HPKG" >&2; exit 1; }
+  cp -a "$inspect_dir"/lib/libzstd.so* "$stage_dir/lib/"
+
+  source_version=$(awk '$1 == "version" { print $2; exit }' "$inspect_dir/.PackageInfo")
+  [[ -n "$source_version" ]] || { echo "failed to parse zstd version from $ZSTD_SOURCE_HPKG" >&2; exit 1; }
+  source_version_base=${source_version%%-*}
+
+  cat > "$package_info" <<EOF
+name	zstd_runtime
+version	$source_version
+summary	"Zstandard runtime compatibility package for ARM64 validation"
+description	"Packaged libzstd runtime extracted from the locally built zstd bootstrap package for ARM64 desktop validation."
+vendor	"Local"
+packager	"Local"
+architecture	arm64
+copyrights	"2026 Local"
+licenses	{
+	MIT
+}
+provides	{
+	zstd_runtime=$source_version_base
+	lib:libzstd=$source_version_base compat>=1
+}
+requires	{
+	haiku
+}
+flags	system_package
+EOF
+
+  "$PACKAGE_TOOL" create -0 -C "$stage_dir" -i "$package_info" "$ZSTD_HPKG" >/dev/null
+}
 
 create_compat_package() {
   rm -rf "$COMPAT_STAGE"
@@ -315,7 +366,7 @@ PY
   fi
 
   find "$pkgdir" -maxdepth 1 -type f \
-    \( -name 'haiku-*.hpkg' -o -name 'compat_bootstrap_runtime-*.hpkg' -o -name 'expat_bootstrap-*.hpkg' -o -name 'zstd_bootstrap-*.hpkg' \) \
+    \( -name 'haiku-*.hpkg' -o -name 'compat_bootstrap_runtime-*.hpkg' -o -name 'expat_bootstrap-*.hpkg' -o -name 'zstd_bootstrap-*.hpkg' -o -name 'zstd_runtime-*.hpkg' \) \
     -delete
 
   if (( modern_base_deps )); then
@@ -351,6 +402,13 @@ PY
     seek=$SYSTEM_PARTITION_START conv=notrunc status=none
 }
 
+echo "== building zstd runtime package =="
+if [[ "$ZSTD_HPKG" == "$DEFAULT_OUTPUT_ZSTD_HPKG" ]]; then
+  create_zstd_runtime_package
+else
+  echo "== using provided zstd package: $ZSTD_HPKG =="
+fi
+
 echo "== building compat runtime package =="
 create_compat_package
 
@@ -361,6 +419,7 @@ echo "== assembling validated boot image =="
 assemble_image
 
 echo
-ls -lh "$OUTPUT_COMPAT_HPKG" "$OUTPUT_HAIKU_HPKG" "$OUTPUT_IMAGE"
+ls -lh "$ZSTD_HPKG" "$OUTPUT_COMPAT_HPKG" "$OUTPUT_HAIKU_HPKG" "$OUTPUT_IMAGE"
 echo
+echo "validated zstd package: $ZSTD_HPKG"
 echo "validated image: $OUTPUT_IMAGE"

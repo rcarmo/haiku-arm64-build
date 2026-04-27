@@ -9,7 +9,7 @@ BFS_FUSE=${BFS_FUSE:-/workspace/tmp/bfs_fuse}
 BASE_IMAGE=${BASE_IMAGE:-/workspace/tmp/haiku-nightly-arm64/haiku-master-arm64-current-mmc.image}
 DIRECT_HAIKU_HPKG=${DIRECT_HAIKU_HPKG:-/workspace/tmp/haiku-build/validated/haiku-direct-icu74.hpkg}
 EXPAT_HPKG=${EXPAT_HPKG:-$BUILD_DIR/objects/haiku/arm64/packaging/repositories/HaikuPortsCross-build/packages/expat_bootstrap-2.5.0-1-arm64.hpkg}
-ZSTD_HPKG=${ZSTD_HPKG:-$BUILD_DIR/objects/haiku/arm64/packaging/repositories/HaikuPortsCross-build/packages/zstd_bootstrap-1.5.6-1-arm64.hpkg}
+ZSTD_HPKG=${ZSTD_HPKG:-/workspace/tmp/haiku-build/validated/zstd_runtime-1.5.6-1-arm64.hpkg}
 HARNESS=${HARNESS:-$SCRIPT_DIR/qemu-desktop-harness.sh}
 OUTPUT_DIR=${OUTPUT_DIR:-/workspace/tmp/haiku-overlay-probe}
 MOUNT_POINT=${MOUNT_POINT:-/tmp/haiku-bfs-overlay-probe}
@@ -212,7 +212,8 @@ prepare_overlay_case() {
   rm -f "$pkgdir"/haiku-r1~beta5_*-arm64.hpkg \
         "$pkgdir"/haiku-direct-*.hpkg \
         "$pkgdir"/expat_bootstrap-*.hpkg \
-        "$pkgdir"/zstd_bootstrap-*.hpkg
+        "$pkgdir"/zstd_bootstrap-*.hpkg \
+        "$pkgdir"/zstd_runtime-*.hpkg
 
   cp "$DIRECT_HAIKU_HPKG" "$pkgdir/"
   if (( add_expat )); then
@@ -249,7 +250,7 @@ cat <<EOF >> "$SUMMARY_MD"
 
 - \`stock\` should already validate on the newer rebootstrapped arm64 nightly.
 - \`direct_only\` and \`direct_plus_expat\` should fail because the direct package still needs \`libzstd.so.1\`.
-- \`direct_plus_zstd\` should now validate cleanly: the validated direct package prunes the optional Cortex demo and no longer requires \`lib:libexpat\`.
+- \`direct_plus_zstd\` should now validate cleanly: the validated direct package prunes the optional Cortex demo and no longer requires \`lib:libexpat\`, and the current default zstd overlay is the smaller local \`zstd_runtime\` package.
 - \`direct_plus_zstd_expat\` should also validate cleanly, but the extra expat overlay is now expected to be unnecessary.
 EOF
 
