@@ -1,11 +1,11 @@
 # Haiku ARM64 Build Environment
 
 > [!IMPORTANT]
-> **Disclaimer:** this is not an official effort to get Haiku up and running on Orange Pi hardware — this is a personal effort, and judging by [the Haiku project's reaction](https://discuss.haiku-os.org/t/my-haiku-arm64-progress/19044/19), it will remain just that. After this scaffolding is finished and I have [`rcarmo/9front`](https://github.com/rcarmo/9front) booting on the target hardware, I will try to build an equivalent U-Boot path for Haiku and publish it as MIT — and if nobody takes it, that is perfectly fine with me.
+> **Disclaimer:** this is not an official effort to get Haiku up and running on Orange Pi hardware — this is a personal effort, and judging by [the Haiku project's reaction](https://discuss.haiku-os.org/t/ai-build-harness-for-arm/19142), it will remain just that. After this scaffolding is finished and I have [`rcarmo/9front`](https://github.com/rcarmo/9front) booting on the target hardware, I will try to build an equivalent U-Boot path for Haiku and publish it as MIT — and if nobody takes it, that is perfectly fine with me.
 
 ![Haiku ARM64 Build icon](docs/icon-256.png)
 
-Reproducible build setup for Haiku OS ARM64 on Orange Pi 6 Plus.
+Reproducible build setup for Haiku OS ARM64 with a full-package QEMU validation lane and early Orange Pi 4 Pro bring-up planning.
 
 ## Status: Boots to Desktop from the Full Direct Package Lane (2026-04-27)
 
@@ -72,9 +72,17 @@ Maintainer docs:
 
 - [`docs/MAINTAINER-CHECKLIST.md`](docs/MAINTAINER-CHECKLIST.md)
 - [`docs/UBOOT-ASSESSMENT.md`](docs/UBOOT-ASSESSMENT.md)
+- [`docs/DRIVER-SCAFFOLD-PLAN.md`](docs/DRIVER-SCAFFOLD-PLAN.md)
 - [`AGENTS.md`](AGENTS.md)
 
-Boot-surface baseline now checked into the repo:
+Current targeting split:
+
+- authoritative software target: the full direct-package QEMU lane
+- first physical target: **Orange Pi 4 Pro** (`orangepi4pro`, Allwinner A733 / `sun60iw2`)
+- the local Orange Pi 6 Plus remains the build host and a historical host-boot
+  reference only; it is **not** the first physical Haiku target anymore
+
+Historical local-host boot snapshot still checked into the repo:
 
 - [`bootstrap/orangepi6plus/host-efi-2026-04-27/`](bootstrap/orangepi6plus/host-efi-2026-04-27/)
 
@@ -87,27 +95,29 @@ make toolchain   # build cross-compiler (~15 min)
 make nightly-arm64-sync  # fetch latest stock arm64 nightly base image
 make image       # build minimum MMC image (~5 min)
 make test        # QEMU smoke test (30s)
-make desktop-image  # assemble the validated ICU74 desktop test image
+make full-image  # alias for desktop-image; full direct-package QEMU image
 ```
 
 ## Early Validation Harness
 
-For later regression work, the repo now includes a small QEMU desktop harness:
+For later regression work, the repo now includes a small QEMU desktop harness.
+The new `full-*` targets are the preferred names for the authoritative full-QEMU
+lane; the older `desktop-*` names remain as compatibility aliases.
 
 ```sh
-make nightly-arm64-sync    # download latest arm64 nightly MMC image and update symlink
-make stock-validate        # validate the stock nightly image directly
-make desktop-image         # assemble the validated ICU74 desktop boot image
-make desktop-refresh       # sync nightly base, rebuild direct image, validate it
-make desktop-probe-overlays # validate the stock/direct overlay matrix on current nightly
-make desktop-run           # start that image under detached tmux
-make desktop-status      # print session/log/state info and recent serial output
-make desktop-logs        # tail the serial log interactively
-make desktop-attach      # attach to the tmux session
-make desktop-screenshot  # save a framebuffer screenshot from the detached run
-make desktop-stop        # stop the detached tmux session
-make desktop-validate    # headless validation using injected marker jobs
-make orangepi6plus-efi-snapshot # snapshot the current host EFI/GRUB boot surface
+make full-sync            # alias for nightly-arm64-sync
+make full-stock-validate  # alias for stock-validate
+make full-image           # alias for desktop-image
+make full-validate        # alias for desktop-validate
+make full-probe-overlays  # alias for desktop-probe-overlays
+make full-check           # run the full regression lane above in order
+make full-run             # alias for desktop-run
+make full-status          # alias for desktop-status
+make full-logs            # alias for desktop-logs
+make full-attach          # alias for desktop-attach
+make full-screenshot      # alias for desktop-screenshot
+make full-stop            # alias for desktop-stop
+make orangepi6plus-efi-snapshot # historical local-host EFI/GRUB snapshot helper
 ```
 
 Key automation scripts:
@@ -116,7 +126,7 @@ Key automation scripts:
 - `scripts/build-validated-desktop-image.sh`
 - `scripts/probe-direct-package-overlays.sh`
 - `scripts/qemu-desktop-harness.sh`
-- `scripts/snapshot-orangepi6plus-efi.sh`
+- `scripts/snapshot-orangepi6plus-efi.sh` (historical local-host snapshot helper)
 
 Current defaults:
 
@@ -128,7 +138,7 @@ Current defaults:
 - graphical run image: same as above
 - validation image: same as above
 
-`make desktop-image` now assembles the reproducible local ICU74 desktop image from:
+`make full-image` (alias: `make desktop-image`) now assembles the reproducible local ICU74 desktop image from:
 
 - the generated direct `haiku.hpkg` contents
 - a grown system partition (currently 512 MiB)
@@ -146,20 +156,20 @@ requirement for desktop validation.
 For older base images, the script still has a legacy fallback path that injects
 `compat_bootstrap_runtime` plus sanitized bootstrap `bash`/`coreutils` packages.
 
-`make desktop-run` is the primary async path. It returns immediately and writes a
+`make full-run` (alias: `make desktop-run`) is the primary async path. It returns immediately and writes a
 stable tmux/state/monitor setup under:
 
 - `/workspace/tmp/haiku-boot-harness/`
 
-For interactive follow-up after `make desktop-run`:
+For interactive follow-up after `make full-run`:
 
-- `make desktop-status`
-- `make desktop-logs`
-- `make desktop-attach`
-- `make desktop-screenshot`
+- `make full-status`
+- `make full-logs`
+- `make full-attach`
+- `make full-screenshot`
 
-`make desktop-capture` still exists as a blocking convenience target, but it is not
-required for the normal async workflow.
+`make full-capture` (alias: `make desktop-capture`) still exists as a blocking
+convenience target, but it is not required for the normal async workflow.
 
 The validation mode boots headlessly, injects additive temporary `user_launch` jobs into a
 writable copy of the image, captures the serial log, and verifies launch markers for:
@@ -173,7 +183,7 @@ It downloads the newest available ARM64 nightly MMC zip, extracts it under
 `/workspace/tmp/haiku-nightly-arm64/`, and updates a stable symlink that the
 image-builder consumes by default.
 
-`make desktop-probe-overlays` automates the current overlay-minimization matrix.
+`make full-probe-overlays` (alias: `make desktop-probe-overlays`) automates the current overlay-minimization matrix.
 It validates:
 
 - stock nightly
@@ -203,6 +213,23 @@ and writes both per-case validation logs and a Markdown/TSV summary under:
 - `/workspace/tmp/haiku-overlay-probe/summary.tsv`
 - `/workspace/tmp/haiku-overlay-probe/*.validate.log`
 
+## Current priorities
+
+1. keep the full direct-package QEMU lane authoritative and boring
+2. retire the remaining local `zstd_runtime` shim when upstream/local package
+   coverage grows a real `libzstd` provider
+3. use the full-QEMU lane to sketch the driver scaffolding we will eventually
+   need for Orange Pi 4 Pro bring-up, starting with:
+   - FDT/board hooks
+   - early serial + interrupt + timer plumbing
+   - clock/reset/pinctrl stubs
+   - MMC/eMMC, GMAC ethernet, USB XHCI, PCIe/NVMe, and framebuffer/display paths
+
+See also:
+
+- [`docs/DRIVER-SCAFFOLD-PLAN.md`](docs/DRIVER-SCAFFOLD-PLAN.md)
+- [`docs/UBOOT-ASSESSMENT.md`](docs/UBOOT-ASSESSMENT.md)
+
 ## Target Hardware / Validation Profiles
 
 ### Current automated validation target: QEMU `virt` ARM64 machine
@@ -226,10 +253,11 @@ platform with the following effective hardware profile:
 This is the current authoritative hardware profile for CI-like desktop boot
 validation.
 
-### Build host / near-term physical bring-up target: Orange Pi 6 Plus
+### Build host
 
-The build and automation environment currently runs on an Orange Pi 6 Plus and
-that board remains the natural near-term physical bring-up target.
+The build and automation environment currently runs on an Orange Pi 6 Plus.
+That host remains the local machine for reproducible builds, but it is no longer
+our first physical Haiku bring-up target.
 
 Current local hardware profile:
 
@@ -244,17 +272,40 @@ Current local hardware profile:
 - primary LAN interface: `enP1p49s0`
 - OS: Debian Trixie (aarch64)
 
-This host is used for reproducible builds today and is also the most practical
-local board target for future non-QEMU bring-up once the automated QEMU lane is
-fully pared down.
-
-For the current physical bootloader strategy assessment, see:
-
-- [`docs/UBOOT-ASSESSMENT.md`](docs/UBOOT-ASSESSMENT.md)
-
-The current pinned Orange Pi 6 Plus EFI/GRUB snapshot is under:
+Historical local-host EFI/GRUB snapshot:
 
 - [`bootstrap/orangepi6plus/host-efi-2026-04-27/`](bootstrap/orangepi6plus/host-efi-2026-04-27/)
+
+### First physical bring-up target: Orange Pi 4 Pro
+
+The first real-board target is now **Orange Pi 4 Pro**, matching the board under
+active bring-up in the local 9front repo.
+
+Board identity and currently relevant facts:
+
+- board: Orange Pi 4 Pro
+- SoC: Allwinner A733 (`sun60iw2`)
+- debug UART: UART0 at `0x02500000`
+- expected serial settings: `115200` 8N1
+- boot priority: SD/TF card before eMMC
+- vendor DTB reference: `sun60i-a733-orangepi-4-pro.dtb`
+- known-good vendor boot-chain layout from the 9front repo:
+  - 8 KiB: `boot0`
+  - 16.8 MiB: `boot_package`
+  - 32 MiB+: FAT partition with boot payloads
+
+Reference material currently lives in the 9front repo:
+
+- `/workspace/projects/9front/README.md`
+- `/workspace/projects/9front/docs/BOARD-NOTES.md`
+- `/workspace/projects/9front/docs/BRINGUP-STATUS.md`
+- `/workspace/projects/9front/bootstrap/orangepi4pro/vendor-debian-1.0.6/`
+
+For the current Haiku-side physical boot strategy and the driver-scaffold plan,
+see:
+
+- [`docs/UBOOT-ASSESSMENT.md`](docs/UBOOT-ASSESSMENT.md)
+- [`docs/DRIVER-SCAFFOLD-PLAN.md`](docs/DRIVER-SCAFFOLD-PLAN.md)
 
 ## QEMU Boot (working)
 

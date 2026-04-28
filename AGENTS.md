@@ -9,6 +9,7 @@ Use it with:
 - `README.md`
 - `docs/MAINTAINER-CHECKLIST.md`
 - `docs/UBOOT-ASSESSMENT.md`
+- `docs/DRIVER-SCAFFOLD-PLAN.md`
 - `docs/boot-debug-notes-2026-04-23.md`
 
 ## Identity / environment guardrail
@@ -18,20 +19,24 @@ Keep this repo aligned with the current local machine and workflow.
 Current authoritative environment:
 
 - host: Orange Pi 6 Plus
-- SoC: CIX P1 (`CD8180` / `CD8160` family)
+- host SoC: CIX P1 (`CD8180` / `CD8160` family)
 - OS: Debian Trixie (aarch64)
 - runtime mode: host-native local workspace
 - canonical workspace root: `/workspace`
 - repo root: `/workspace/projects/haiku-build`
 - default repo branch: `master`
+- first physical Haiku target: Orange Pi 4 Pro (`orangepi4pro`, Allwinner A733 / `sun60iw2`)
 
-Do not mix this repo's workflow with other boards' boot blobs or boot offsets.
-In particular, do **not** import the Orange Pi 4 Pro / Allwinner A733 boot chain
-from `/workspace/projects/9front` into this repo.
+Do not mix this repo's workflow with unrelated boards' boot blobs or offsets.
+For the current first physical target, use the Orange Pi 4 Pro / A733 facts from
+`/workspace/projects/9front` as the board reference, but do **not** blindly copy
+9front kernels, wrappers, or vendor blobs into this repo without provenance and a
+clear Haiku-side reason.
 
 ## What this repo currently owns
 
-This repo currently owns a **reproducible QEMU validation lane** for Haiku ARM64.
+This repo currently owns a **reproducible full-package QEMU validation lane**
+for Haiku ARM64.
 
 That lane covers:
 
@@ -40,8 +45,9 @@ That lane covers:
 - rebuilding a direct-package desktop image on top of that base
 - validating the rebuilt image in QEMU
 - probing the overlay-minimization matrix
+- providing the software-side baseline we will use to sketch later driver scaffolding
 
-This repo does **not** yet own a complete physical Orange Pi 6 Plus boot lane.
+This repo does **not** yet own a complete physical Orange Pi 4 Pro boot lane.
 That is a later stage.
 
 ## Canonical repo layout
@@ -60,21 +66,29 @@ That is a later stage.
 
 Prefer `make` targets over ad-hoc shell pipelines.
 
-Main targets:
+Preferred full-QEMU targets:
 
 ```sh
-make nightly-arm64-sync
-make stock-validate
-make desktop-image
-make desktop-refresh
-make desktop-probe-overlays
-make desktop-run
-make desktop-status
-make desktop-logs
-make desktop-attach
-make desktop-screenshot
-make desktop-stop
-make desktop-validate
+make full-sync
+make full-stock-validate
+make full-image
+make full-refresh
+make full-probe-overlays
+make full-run
+make full-status
+make full-logs
+make full-attach
+make full-screenshot
+make full-stop
+make full-validate
+make full-check
+```
+
+Legacy compatibility aliases still exist under the older `desktop-*` names.
+
+Historical local-host helper:
+
+```sh
 make orangepi6plus-efi-snapshot
 ```
 
@@ -84,7 +98,7 @@ make orangepi6plus-efi-snapshot
 - `scripts/build-validated-desktop-image.sh`
 - `scripts/probe-direct-package-overlays.sh`
 - `scripts/qemu-desktop-harness.sh`
-- `scripts/snapshot-orangepi6plus-efi.sh`
+- `scripts/snapshot-orangepi6plus-efi.sh` (historical local-host snapshot helper)
 
 When editing workflow behavior, read the relevant script fully before changing
 it.
@@ -158,8 +172,8 @@ Run the relevant validation targets.
 Minimum expectations:
 
 - script changes must be tested with the corresponding `make` target(s)
-- package composition changes must be tested with `make desktop-validate`
-- overlay expectation changes must be tested with `make desktop-probe-overlays`
+- package composition changes must be tested with `make full-validate`
+- overlay expectation changes must be tested with `make full-probe-overlays`
 - workflow changes should update docs in the same tranche
 
 ### Before declaring done
@@ -184,27 +198,27 @@ make stock-validate
 Run:
 
 ```sh
-make desktop-image
-make desktop-validate
+make full-image
+make full-validate
 ```
 
-Also run `make desktop-probe-overlays` if package composition or expectations changed.
+Also run `make full-probe-overlays` if package composition or expectations changed.
 
 ### `scripts/qemu-desktop-harness.sh`
 
 Run:
 
 ```sh
-make stock-validate
-make desktop-validate
+make full-stock-validate
+make full-validate
 ```
 
 And if run/capture/session handling changed:
 
 ```sh
-make desktop-run
-make desktop-status
-make desktop-stop
+make full-run
+make full-status
+make full-stop
 ```
 
 ### `scripts/probe-direct-package-overlays.sh`
@@ -212,7 +226,7 @@ make desktop-stop
 Run:
 
 ```sh
-make desktop-probe-overlays
+make full-probe-overlays
 ```
 
 ## Documentation policy
@@ -225,6 +239,7 @@ Core docs to keep aligned:
 - `docs/boot-debug-notes-2026-04-23.md`
 - `docs/MAINTAINER-CHECKLIST.md`
 - `docs/UBOOT-ASSESSMENT.md`
+- `docs/DRIVER-SCAFFOLD-PLAN.md`
 - `AGENTS.md`
 
 Also keep the local workspace note aligned:
@@ -241,30 +256,33 @@ Also keep the local workspace note aligned:
 - `HAIKU_NO_DOWNLOADS=1` local fallback behavior still matters because the newer
   full upstream arm64 package set is not yet fully available locally
 
-## Physical Orange Pi 6 Plus bring-up policy
+## Physical Orange Pi 4 Pro bring-up policy
 
 The current recommendation is:
 
-- keep using QEMU `virt` + UEFI as the software-validation authority
-- when starting physical board boot, prefer the board's current EFI-facing boot
-  surface first
-- only create a repo-owned U-Boot lane if the EFI-first path proves inadequate
+- keep using the full QEMU `virt` + UEFI lane as the software-validation authority
+- treat Orange Pi 4 Pro as the first physical board target
+- use `/workspace/projects/9front` as the current source of truth for the board
+  identity, vendor boot-chain facts, serial setup, and bring-up notes
+- do **not** blindly reuse 9front payloads; when Haiku physical work starts,
+  create explicit Haiku-side artifacts and provenance under a board-specific tree
+- use the full-QEMU lane to sketch the driver scaffolding before trying to solve
+  every board-specific hardware path at once
 
-For the reasoning and the comparison against the local 9front work, read:
+For the reasoning, board facts, and staging plan, read:
 
 - `docs/UBOOT-ASSESSMENT.md`
+- `docs/DRIVER-SCAFFOLD-PLAN.md`
 
-## Current observed Orange Pi 6 Plus boot facts
+## Historical local Orange Pi 6 Plus host boot facts
 
-A pinned EFI/GRUB snapshot baseline now exists at:
+A pinned EFI/GRUB snapshot baseline still exists at:
 
 - `bootstrap/orangepi6plus/host-efi-2026-04-27/`
 
 Use `make orangepi6plus-efi-snapshot` to refresh a working-tree snapshot under:
 
 - `/workspace/tmp/orangepi6plus-efi-snapshot/latest`
-
-## Current observed Orange Pi 6 Plus boot facts
 
 Observed on this host:
 
@@ -278,22 +296,27 @@ Observed on this host:
   - `SKY1-ORANGEPI-6-PLUS.DTB`
 - the GRUB config includes a serial console setting of `ttyAMA2,115200`
 
-Treat that as the current board-boot observation baseline until a dedicated
-Orange Pi 6 Plus Haiku boot path exists.
+Treat that as a build-host reference only. It is **not** the active first-board
+Haiku bring-up target anymore.
 
 ## Maintainer priorities
 
-1. remove or replace the remaining local `zstd_runtime` generation step
+1. keep the full direct-package QEMU lane healthy and authoritative
+2. remove or replace the remaining local `zstd_runtime` generation step
    by getting a real `libzstd` provider into the stock or normal arm64 package path
-2. collapse unnecessary control cases from the overlay probe
-3. decide when to retire the legacy fallback path
-4. only then push deeper into physical Orange Pi 6 Plus bring-up
+3. collapse unnecessary control cases from the overlay probe and decide when to
+   retire the legacy fallback path
+4. sketch the first Orange Pi 4 Pro driver-scaffolding tranche from the working
+   QEMU lane
+5. only then push deeper into physical Orange Pi 4 Pro bring-up
 
 ## Hard guardrails
 
 - do not delete or corrupt `/workspace/tmp` artifacts that are still being used
   for validation/debugging without good reason
-- do not mix 9front Orange Pi 4 Pro blobs with this repo's Orange Pi 6 Plus work
+- do not let board names drift: the first physical target is Orange Pi 4 Pro,
+  while the local machine is still Orange Pi 6 Plus
+- do not blindly copy 9front Orange Pi 4 Pro blobs/payloads into this repo
 - do not declare a workflow change complete without rerunning the relevant Make
   targets
 - do not let docs drift away from the observed validation state

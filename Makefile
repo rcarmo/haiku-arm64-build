@@ -23,7 +23,10 @@ ORANGEPI6PLUS_EFI_ESP_DEV := /dev/nvme0n1p1
 .PHONY: all toolchain image clean update test help \
 	nightly-arm64-sync stock-validate desktop-refresh desktop-probe-overlays \
 	desktop-image desktop-run desktop-stop desktop-status desktop-logs desktop-attach \
-	desktop-capture desktop-screenshot desktop-validate orangepi6plus-efi-snapshot
+	desktop-capture desktop-screenshot desktop-validate \
+	full-sync full-stock-validate full-image full-refresh full-probe-overlays \
+	full-run full-stop full-status full-logs full-attach full-capture \
+	full-screenshot full-validate full-check orangepi6plus-efi-snapshot
 
 help:
 	@echo "Haiku ARM64 Build System"
@@ -49,6 +52,21 @@ help:
 	@echo "  desktop-capture    - Blocking convenience target: run + wait + screenshot"
 	@echo "  desktop-stop       - Stop the detached desktop tmux session"
 	@echo "  desktop-validate   - Headless marker-based desktop validation harness"
+	@echo ""
+	@echo "  full-sync           - Alias for nightly-arm64-sync"
+	@echo "  full-stock-validate - Alias for stock-validate"
+	@echo "  full-image          - Alias for desktop-image"
+	@echo "  full-refresh        - Alias for desktop-refresh"
+	@echo "  full-probe-overlays - Alias for desktop-probe-overlays"
+	@echo "  full-run            - Alias for desktop-run"
+	@echo "  full-status         - Alias for desktop-status"
+	@echo "  full-logs           - Alias for desktop-logs"
+	@echo "  full-attach         - Alias for desktop-attach"
+	@echo "  full-screenshot     - Alias for desktop-screenshot"
+	@echo "  full-capture        - Alias for desktop-capture"
+	@echo "  full-stop           - Alias for desktop-stop"
+	@echo "  full-validate       - Alias for desktop-validate"
+	@echo "  full-check          - Run the authoritative full-package QEMU regression lane"
 	@echo "  orangepi6plus-efi-snapshot - Snapshot the current host EFI/GRUB boot surface"
 	@echo "  update     - Git pull both repos"
 	@echo "  clean      - Remove generated.arm64"
@@ -228,6 +246,21 @@ desktop-screenshot:
 desktop-validate:
 	@chmod +x $(CURDIR)/scripts/qemu-desktop-harness.sh
 	$(CURDIR)/scripts/qemu-desktop-harness.sh validate --timeout "$(DESKTOP_VALIDATE_TIMEOUT_SECS)" --image "$(DESKTOP_VALIDATE_IMAGE)"
+
+full-sync: nightly-arm64-sync
+full-stock-validate: stock-validate
+full-image: desktop-image
+full-refresh: desktop-refresh
+full-probe-overlays: desktop-probe-overlays
+full-run: desktop-run
+full-stop: desktop-stop
+full-status: desktop-status
+full-logs: desktop-logs
+full-attach: desktop-attach
+full-capture: desktop-capture
+full-screenshot: desktop-screenshot
+full-validate: desktop-validate
+full-check: full-sync full-stock-validate full-image full-validate full-probe-overlays
 
 orangepi6plus-efi-snapshot:
 	@chmod +x $(CURDIR)/scripts/snapshot-orangepi6plus-efi.sh

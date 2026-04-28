@@ -48,11 +48,13 @@ The larger payload files were not copied into git, but they are fully listed in
 This is the first pinned Orange Pi 6 Plus boot-surface baseline for the Haiku
 repo.
 
-It exists so that later physical bring-up work can:
+It is now a **historical build-host reference**, not the first physical Haiku
+bring-up target.
 
-- compare against a known-good host boot surface
-- reuse the current EFI-first approach before attempting any repo-owned U-Boot
-  lane
-- keep bootloader-related assumptions tied to the actual Orange Pi 6 Plus host,
-  not the unrelated Allwinner A733 / Orange Pi 4 Pro workflow from the 9front
-  repo
+It exists so that later work can:
+
+- compare against a known-good local host boot surface when host-side questions
+  arise
+- keep older Orange Pi 6 Plus EFI observations from being lost
+- keep those assumptions clearly separate from the current Orange Pi 4 Pro /
+  Allwinner A733 physical bring-up plan shared with the 9front board work
