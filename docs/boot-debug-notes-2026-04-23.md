@@ -767,7 +767,7 @@ Current validation/build hardware context:
 - serial console: PL011 via `-nographic`
 - interrupt controller observed in guest logs: GICv2
 
-#### Local build / likely physical bring-up target
+#### Local build host
 
 - board: Orange Pi 6 Plus
 - SoC: CIX P1 (`CD8180` / `CD8160` family)
@@ -779,6 +779,18 @@ Current validation/build hardware context:
   - swap: `/dev/nvme0n1p3`
 - primary LAN interface: `enP1p49s0`
 - OS: Debian Trixie on AArch64
+
+#### First physical bring-up target
+
+- board: Orange Pi 4 Pro
+- SoC: Allwinner A733 (`sun60iw2`)
+- serial: UART0 at `0x02500000`, `115200` 8N1
+- boot priority: TF/SD before eMMC
+- vendor DTB reference: `sun60i-a733-orangepi-4-pro.dtb`
+- working vendor boot-chain reference currently documented in:
+  - `/workspace/projects/9front/docs/BOARD-NOTES.md`
+  - `/workspace/projects/9front/docs/BRINGUP-STATUS.md`
+  - `/workspace/projects/9front/bootstrap/orangepi4pro/vendor-debian-1.0.6/`
 
 ---
 

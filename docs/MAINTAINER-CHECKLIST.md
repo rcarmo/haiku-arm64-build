@@ -9,6 +9,7 @@ Use it together with:
 - `AGENTS.md`
 - `docs/boot-debug-notes-2026-04-23.md`
 - `docs/UBOOT-ASSESSMENT.md`
+- `docs/DRIVER-SCAFFOLD-PLAN.md`
 - `bootstrap/orangepi6plus/host-efi-2026-04-27/README.md`
 
 ## Scope
@@ -22,7 +23,7 @@ This checklist covers the current authoritative workflow:
 - probe the stock/direct overlay matrix
 - keep docs aligned with the current observed state
 
-It does **not** assume physical Orange Pi 6 Plus boot is already working.
+It does **not** assume physical Orange Pi 4 Pro boot is already working.
 Physical boot remains a later stage.
 
 ## Canonical environment
@@ -34,20 +35,28 @@ Physical boot remains a later stage.
 - service/runtime context: host-native on the Orange Pi host
 - default repo branch: `master`
 - main Haiku source branch: `haiku/` on `arm64-bootstrap-fixes`
+- first physical target: Orange Pi 4 Pro (`orangepi4pro`, Allwinner A733 / `sun60iw2`)
 
 ## Canonical one-command flow
 
 For the normal regression lane, run these in order:
 
 ```sh
-make nightly-arm64-sync
-make stock-validate
-make desktop-image
-make desktop-validate
-make desktop-probe-overlays
+make full-sync
+make full-stock-validate
+make full-image
+make full-validate
+make full-probe-overlays
 ```
 
-If all of those pass, the current lane is healthy.
+or just:
+
+```sh
+make full-check
+```
+
+If all of those pass, the current lane is healthy. The older `desktop-*` target
+names still exist as compatibility aliases.
 
 ## Expected current state
 
@@ -102,11 +111,17 @@ Current probe expectations:
 - overlay probe logs:
   - `/workspace/tmp/haiku-overlay-probe/*.validate.log`
 
-### Physical boot baseline
+### Physical bring-up references
 
-- pinned repo snapshot:
+- first target board reference blobs:
+  `/workspace/projects/9front/bootstrap/orangepi4pro/vendor-debian-1.0.6/`
+- first target board notes:
+  `/workspace/projects/9front/docs/BOARD-NOTES.md`
+- first target board bring-up status:
+  `/workspace/projects/9front/docs/BRINGUP-STATUS.md`
+- historical local-host snapshot:
   `/workspace/projects/haiku-build/bootstrap/orangepi6plus/host-efi-2026-04-27/`
-- refreshable working snapshot:
+- refreshable historical local-host snapshot:
   `/workspace/tmp/orangepi6plus-efi-snapshot/latest`
 
 ## What to run after each class of change
@@ -127,11 +142,11 @@ Confirm the stable symlink still points to a valid extracted image.
 Run:
 
 ```sh
-make desktop-image
-make desktop-validate
+make full-image
+make full-validate
 ```
 
-Also run `make desktop-probe-overlays` if the change affects:
+Also run `make full-probe-overlays` if the change affects:
 
 - package composition
 - solver metadata
@@ -144,17 +159,17 @@ Also run `make desktop-probe-overlays` if the change affects:
 Run:
 
 ```sh
-make stock-validate
-make desktop-validate
+make full-stock-validate
+make full-validate
 ```
 
 If you touched marker logic, log parsing, crash detection, or screenshot/run
 mode, also exercise:
 
 ```sh
-make desktop-run
-make desktop-status
-make desktop-stop
+make full-run
+make full-status
+make full-stop
 ```
 
 ### If you change `scripts/probe-direct-package-overlays.sh`
@@ -162,12 +177,12 @@ make desktop-stop
 Run:
 
 ```sh
-make desktop-probe-overlays
+make full-probe-overlays
 ```
 
 and verify `summary.md` matches the intended expectation matrix.
 
-### If you change `scripts/snapshot-orangepi6plus-efi.sh` or physical boot assumptions
+### If you change `scripts/snapshot-orangepi6plus-efi.sh` or local host boot-reference assumptions
 
 Run:
 
@@ -181,11 +196,17 @@ Then verify:
 - `/workspace/tmp/orangepi6plus-efi-snapshot/latest/SHA256SUMS`
 - `/workspace/tmp/orangepi6plus-efi-snapshot/latest/GRUB/GRUB.CFG`
 
-If the observed board boot surface changed materially, update:
+If the observed local-host boot surface changed materially, update:
 
 - `docs/UBOOT-ASSESSMENT.md`
 - `AGENTS.md`
 - the pinned repo baseline under `bootstrap/orangepi6plus/`
+
+If the Orange Pi 4 Pro bring-up assumptions changed materially, update:
+
+- `docs/UBOOT-ASSESSMENT.md`
+- `docs/DRIVER-SCAFFOLD-PLAN.md`
+- `AGENTS.md`
 
 ### If you change direct package contents or package metadata
 
@@ -199,11 +220,11 @@ Examples:
 Run the full lane:
 
 ```sh
-make nightly-arm64-sync
-make stock-validate
-make desktop-image
-make desktop-validate
-make desktop-probe-overlays
+make full-sync
+make full-stock-validate
+make full-image
+make full-validate
+make full-probe-overlays
 ```
 
 ## Pass/fail criteria
@@ -216,7 +237,7 @@ Expected:
 - marker files for `app_server`, `Tracker`, `Deskbar` are present
 - no fatal crash signature in validate logs
 
-### `make desktop-validate`
+### `make full-validate`
 
 Expected:
 
@@ -224,7 +245,7 @@ Expected:
 - marker files for `app_server`, `Tracker`, `Deskbar` are present
 - `package_daemon` reports `/boot/system` consistent
 
-### `make desktop-probe-overlays`
+### `make full-probe-overlays`
 
 Expected summary:
 
@@ -282,6 +303,7 @@ When the observed state changes, update docs in the same tranche as the code:
 - `docs/ZSTD-RUNTIME-VALIDATION-2026-04-27.md` when the zstd-replacement state changes
 - `docs/MAINTAINER-CHECKLIST.md`
 - `docs/UBOOT-ASSESSMENT.md` if the board-boot strategy changes
+- `docs/DRIVER-SCAFFOLD-PLAN.md` if the QEMU→hardware staging or driver plan changes
 - `AGENTS.md`
 - `/workspace/notes/haiku-arm64-build.md`
 
@@ -307,21 +329,25 @@ validation targets have passed.
 
 ## Current maintainer priorities
 
-1. remove the remaining local `zstd_runtime` generation step by ensuring the
+1. keep the full direct-package QEMU lane healthy and authoritative
+2. remove the remaining local `zstd_runtime` generation step by ensuring the
    stock base or the normal arm64 package set carries `libzstd.so.1`
-2. collapse the extra `expat_bootstrap` control cases from the probe when they
-   stop being useful
-3. decide when to retire the older legacy fallback path
-4. only after the QEMU lane is pared down, move on to physical Orange Pi 6 Plus
-   bring-up
+3. collapse the extra `expat_bootstrap` control cases from the probe when they
+   stop being useful and decide when to retire the older legacy fallback path
+4. use the full-QEMU lane to sketch the first Orange Pi 4 Pro driver-scaffolding
+   tranche
+5. only after that, move on to physical Orange Pi 4 Pro bring-up
 
 ## Physical boot / U-Boot guardrail
 
-Do **not** import the Orange Pi 4 Pro / Allwinner A733 9front boot blobs or sunxi
-packaging assumptions into this repo.
+Do **not** blindly copy Orange Pi 4 Pro / Allwinner A733 9front payloads into
+this repo.
 
-For Orange Pi 6 Plus boot strategy, see:
+For the current Orange Pi 4 Pro boot strategy and the QEMU-first driver-scaffold
+plan, see:
 
 - `docs/UBOOT-ASSESSMENT.md`
+- `docs/DRIVER-SCAFFOLD-PLAN.md`
 
-That document is the canonical place for the current U-Boot/UEFI assessment.
+Those documents are the canonical place for the current hardware-target and
+staging assessment.
