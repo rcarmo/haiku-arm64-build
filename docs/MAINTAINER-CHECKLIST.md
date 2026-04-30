@@ -42,6 +42,7 @@ Physical boot remains a later stage.
 For the normal regression lane, run these in order:
 
 ```sh
+make bfs-fuse
 make full-sync
 make full-stock-validate
 make full-image
@@ -55,13 +56,18 @@ or just:
 make full-check
 ```
 
-If all of those pass, the current lane is healthy. The older `desktop-*` target
-names still exist as compatibility aliases.
+If all of those pass, the current lane is healthy. `make full-check` now reaches
+`make bfs-fuse` through the validation/image prerequisites, so a cleaned
+`/workspace/tmp/bfs_fuse` symlink is recreated from the host-built Haiku
+`bfs_fuse` helper before any BFS partition mounting. The older `desktop-*`
+target names still exist as compatibility aliases.
 
 ## Expected current state
 
 As of 2026-04-30, the expected modern overlay state is:
 
+- `make full-check` validates end-to-end in QEMU after `make bfs-fuse` creates
+  `/workspace/tmp/bfs_fuse` from the host-built Haiku BFS FUSE helper
 - the local arm64 `HAIKU_NO_DOWNLOADS=1` `@minimum-mmc` path builds and passes
   the 30s `make test` smoke target after the `haiku/arm64-bootstrap-fixes`
   branch made `noto`, `ncurses6`, and `zstd` explicit fallback packages in

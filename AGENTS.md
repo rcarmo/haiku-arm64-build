@@ -69,6 +69,7 @@ Prefer `make` targets over ad-hoc shell pipelines.
 Preferred full-QEMU targets:
 
 ```sh
+make bfs-fuse
 make full-sync
 make full-stock-validate
 make full-image
@@ -94,6 +95,7 @@ make orangepi6plus-efi-snapshot
 
 ## Authoritative scripts
 
+- `make bfs-fuse` / Haiku `src/tools/bfs_shell` — host BFS FUSE helper bootstrap
 - `scripts/fetch-latest-arm64-nightly.sh`
 - `scripts/build-validated-desktop-image.sh`
 - `scripts/probe-direct-package-overlays.sh`
@@ -107,6 +109,8 @@ it.
 
 As of 2026-04-30:
 
+- `make full-check` validates end-to-end in QEMU after `make bfs-fuse` creates
+  `/workspace/tmp/bfs_fuse` from the host-built Haiku BFS FUSE helper
 - stock ARM64 nightly validates in QEMU
 - the direct-package desktop lane validates in QEMU
 - the local arm64 `HAIKU_NO_DOWNLOADS=1` `@minimum-mmc` path builds and passes

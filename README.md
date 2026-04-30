@@ -97,6 +97,7 @@ Historical local-host boot snapshot still checked into the repo:
 make deps        # install prerequisites (once)
 make clone       # clone haiku + buildtools repos
 make toolchain   # build cross-compiler (~15 min)
+make bfs-fuse    # build/link host BFS FUSE helper for validation scripts
 make nightly-arm64-sync  # fetch latest stock arm64 nightly base image
 make image       # build minimum MMC image (~5 min)
 make test        # QEMU smoke test (30s)
@@ -110,6 +111,7 @@ The new `full-*` targets are the preferred names for the authoritative full-QEMU
 lane; the older `desktop-*` names remain as compatibility aliases.
 
 ```sh
+make bfs-fuse             # build/link host BFS FUSE helper at /workspace/tmp/bfs_fuse
 make full-sync            # alias for nightly-arm64-sync
 make full-stock-validate  # alias for stock-validate
 make full-image           # alias for desktop-image
@@ -127,6 +129,8 @@ make orangepi6plus-efi-snapshot # historical local-host EFI/GRUB snapshot helper
 
 Key automation scripts:
 
+- `make bfs-fuse` ensures `/workspace/tmp/bfs_fuse` points at the host-built
+  `bfs_fuse` helper before the image/harness/probe scripts mount BFS partitions.
 - `scripts/fetch-latest-arm64-nightly.sh`
 - `scripts/build-validated-desktop-image.sh`
 - `scripts/probe-direct-package-overlays.sh`

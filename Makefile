@@ -17,10 +17,12 @@ DESKTOP_STATE_FILE := $(DESKTOP_HARNESS_DIR)/$(DESKTOP_TMUX_SESSION).state
 DESKTOP_MONITOR_SOCKET := $(DESKTOP_HARNESS_DIR)/$(DESKTOP_TMUX_SESSION).monitor.sock
 DESKTOP_SCREENSHOT := $(DESKTOP_HARNESS_DIR)/$(DESKTOP_TMUX_SESSION).ppm
 DESKTOP_VALIDATE_TIMEOUT_SECS := 900
+BFS_FUSE := /workspace/tmp/bfs_fuse
+BFS_FUSE_BUILT := $(BUILD_DIR)/objects/linux/arm64/release/tools/bfs_shell/bfs_fuse
 ORANGEPI6PLUS_EFI_SNAPSHOT_DIR := /workspace/tmp/orangepi6plus-efi-snapshot/latest
 ORANGEPI6PLUS_EFI_ESP_DEV := /dev/nvme0n1p1
 
-.PHONY: all toolchain image clean update test help \
+.PHONY: all toolchain image clean update test help bfs-fuse \
 	nightly-arm64-sync stock-validate desktop-refresh desktop-probe-overlays \
 	desktop-image desktop-run desktop-stop desktop-status desktop-logs desktop-attach \
 	desktop-capture desktop-screenshot desktop-validate \
@@ -35,6 +37,7 @@ help:
 	@echo "  deps       - Install build dependencies (requires sudo)"
 	@echo "  clone      - Clone/update haiku + buildtools repos"
 	@echo "  toolchain  - Build cross-compiler toolchain"
+	@echo "  bfs-fuse   - Build/link the host BFS FUSE helper used by validation scripts"
 	@echo "  image      - Build MMC image (default: @minimum-mmc)"
 	@echo "  raw        - Build raw images (esp.image + haiku-minimum.image)"
 	@echo "  test       - Quick QEMU smoke test (30s)"
@@ -118,6 +121,13 @@ toolchain: clone
 		echo "✅ Toolchain already exists"; \
 	fi
 
+bfs-fuse: toolchain
+	cd $(BUILD_DIR) && jam -j$(NPROC) -q '<build>bfs_fuse'
+	@mkdir -p "$$(dirname "$(BFS_FUSE)")"
+	ln -sf "$(BFS_FUSE_BUILT)" "$(BFS_FUSE)"
+	@test -x "$(BFS_FUSE)"
+	@echo "✅ BFS FUSE helper linked: $(BFS_FUSE) -> $(BFS_FUSE_BUILT)"
+
 image: toolchain
 	cd $(BUILD_DIR) && jam -j$(NPROC) -q @minimum-mmc
 	@echo "✅ Image built: $(IMAGE)"
@@ -166,11 +176,11 @@ nightly-arm64-sync:
 	@chmod +x $(CURDIR)/scripts/fetch-latest-arm64-nightly.sh
 	@$(CURDIR)/scripts/fetch-latest-arm64-nightly.sh
 
-stock-validate: nightly-arm64-sync
+stock-validate: nightly-arm64-sync bfs-fuse
 	@chmod +x $(CURDIR)/scripts/qemu-desktop-harness.sh
 	$(CURDIR)/scripts/qemu-desktop-harness.sh validate --image "$(NIGHTLY_BASE_IMAGE)"
 
-desktop-image:
+desktop-image: bfs-fuse
 	@chmod +x $(CURDIR)/scripts/build-validated-desktop-image.sh
 	BASE_IMAGE="$(NIGHTLY_BASE_IMAGE)" OUTPUT_IMAGE="$(DESKTOP_BUILD_IMAGE)" $(CURDIR)/scripts/build-validated-desktop-image.sh
 
@@ -243,7 +253,7 @@ desktop-screenshot:
 		--screenshot-out "$(DESKTOP_SCREENSHOT)"
 	@echo "✅ Screenshot saved: $(DESKTOP_SCREENSHOT)"
 
-desktop-validate:
+desktop-validate: bfs-fuse
 	@chmod +x $(CURDIR)/scripts/qemu-desktop-harness.sh
 	$(CURDIR)/scripts/qemu-desktop-harness.sh validate --timeout "$(DESKTOP_VALIDATE_TIMEOUT_SECS)" --image "$(DESKTOP_VALIDATE_IMAGE)"
 
