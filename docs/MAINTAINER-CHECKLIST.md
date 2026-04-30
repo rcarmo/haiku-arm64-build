@@ -60,8 +60,12 @@ names still exist as compatibility aliases.
 
 ## Expected current state
 
-As of 2026-04-27, the expected modern overlay state is:
+As of 2026-04-30, the expected modern overlay state is:
 
+- the local arm64 `HAIKU_NO_DOWNLOADS=1` `@minimum-mmc` path builds and passes
+  the 30s `make test` smoke target after the `haiku/arm64-bootstrap-fixes`
+  branch made `noto`, `ncurses6`, and `zstd` explicit fallback packages in
+  `Jamfile`
 - default validated image uses:
   - direct `haiku.hpkg`
   - `/workspace/tmp/haiku-build/validated/zstd_runtime-1.5.6-1-arm64.hpkg`

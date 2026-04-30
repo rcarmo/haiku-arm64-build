@@ -105,10 +105,13 @@ it.
 
 ## Current known-good state
 
-As of 2026-04-27:
+As of 2026-04-30:
 
 - stock ARM64 nightly validates in QEMU
 - the direct-package desktop lane validates in QEMU
+- the local arm64 `HAIKU_NO_DOWNLOADS=1` `@minimum-mmc` path builds and passes
+  the 30s `make test` smoke target after making `noto`, `ncurses6`, and `zstd`
+  explicit fallback packages in `haiku/Jamfile`
 - the default modern validated overlay is:
   - direct `haiku.hpkg`
   - `/workspace/tmp/haiku-build/validated/zstd_runtime-1.5.6-1-arm64.hpkg`

@@ -34,6 +34,11 @@ The automation lane now also covers:
 - probing the current overlay-minimization matrix (`stock`, `direct_only`,
   `direct_plus_expat`, `direct_plus_zstd`, `direct_plus_zstd_expat`)
 
+2026-04-30 follow-up: the `haiku/arm64-bootstrap-fixes` branch also restores the
+local `HAIKU_NO_DOWNLOADS=1` `@minimum-mmc` path by making the arm64 fallback
+packages explicit (`noto`, `ncurses6`, and `zstd`). `make image` and the 30s
+`make test` QEMU smoke target pass again on the Orange Pi 6 Plus build host.
+
 ![QEMU desktop capture with Tracker visible](docs/haiku-desktop-tracker-qemu-2026-04-23.png)
 
 _This screenshot shows the current validated boot lane with Tracker visible. The
