@@ -193,6 +193,8 @@ It downloads the newest available ARM64 nightly MMC zip, extracts it under
 image-builder consumes by default.
 
 `make full-probe-overlays` (alias: `make desktop-probe-overlays`) automates the current overlay-minimization matrix.
+It now uses a 300s per-case validation timeout by default because the hrev59671
+stock ARM64 nightly can launch Deskbar too late for the older 120s probe budget.
 It validates:
 
 - stock nightly

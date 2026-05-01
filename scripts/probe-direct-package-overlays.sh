@@ -13,7 +13,7 @@ ZSTD_HPKG=${ZSTD_HPKG:-/workspace/tmp/haiku-build/validated/zstd_runtime-1.5.6-1
 HARNESS=${HARNESS:-$SCRIPT_DIR/qemu-desktop-harness.sh}
 OUTPUT_DIR=${OUTPUT_DIR:-/workspace/tmp/haiku-overlay-probe}
 MOUNT_POINT=${MOUNT_POINT:-/tmp/haiku-bfs-overlay-probe}
-TIMEOUT_SECS=${TIMEOUT_SECS:-120}
+TIMEOUT_SECS=${TIMEOUT_SECS:-300}
 KEEP_IMAGES=${KEEP_IMAGES:-0}
 
 usage() {

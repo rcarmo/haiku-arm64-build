@@ -85,7 +85,8 @@ As of 2026-04-30, the expected modern overlay state is:
   `zstd_bootstrap` shared-library payload, so the default lane only carries the
   narrower `lib:libzstd` provider it still needs
 
-Current probe expectations:
+Current probe expectations use a 300s per-case timeout by default
+(hrev59671 stock can miss the Deskbar marker under the older 120s budget):
 
 - `stock` → pass
 - `direct_only` → fail
@@ -257,7 +258,10 @@ Expected:
 
 ### `make full-probe-overlays`
 
-Expected summary:
+Expected summary. The probe default timeout is 300s per case; keep that budget
+unless a newer nightly consistently validates faster, because hrev59671 stock
+can miss the Deskbar marker under the older 120s budget.
+
 
 - `stock` → `pass`
 - `direct_only` → `fail`
