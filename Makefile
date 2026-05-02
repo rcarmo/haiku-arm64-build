@@ -19,6 +19,10 @@ DESKTOP_RUN_IMAGE := $(DESKTOP_BUILD_IMAGE)
 DESKTOP_VALIDATE_IMAGE := $(DESKTOP_BUILD_IMAGE)
 VALIDATION_RAW_IMAGE := $(DESKTOP_BUILD_IMAGE)
 VALIDATION_QCOW_IMAGE := /workspace/tmp/haiku-build/validated/haiku-arm64-icu74-desktop.qcow2
+FULL_OUTPUT_DIR := /workspace/tmp/haiku-build/full
+FULL_BUILD_IMAGE := $(FULL_OUTPUT_DIR)/haiku-arm64-icu74-full.boot.img
+FULL_QCOW_IMAGE := $(FULL_OUTPUT_DIR)/haiku-arm64-icu74-full.qcow2
+FULL_VALIDATE_TIMEOUT_SECS := 900
 DESKTOP_HARNESS_DIR := /workspace/tmp/haiku-boot-harness
 DESKTOP_TMUX_SESSION := haiku-desktop
 DESKTOP_STATE_FILE := $(DESKTOP_HARNESS_DIR)/$(DESKTOP_TMUX_SESSION).state
@@ -34,7 +38,9 @@ ORANGEPI6PLUS_EFI_ESP_DEV := /dev/nvme0n1p1
 	nightly-arm64-sync stock-validate desktop-refresh desktop-probe-overlays \
 	desktop-image desktop-run desktop-stop desktop-status desktop-logs desktop-attach \
 	desktop-capture desktop-screenshot desktop-validate \
-	validation-image validation-qcow validation-artifacts release-audit \
+	validation-image validation-qcow validation-artifacts \
+	full-standard-image full-standard-validate full-standard-qcow full-standard-artifacts \
+	release-audit \
 	full-sync full-stock-validate full-image full-refresh full-probe-overlays \
 	full-run full-stop full-status full-logs full-attach full-capture \
 	full-screenshot full-validate full-check orangepi6plus-efi-snapshot
@@ -68,6 +74,7 @@ help:
 	@echo "  validation-image    - Build the core validation raw image"
 	@echo "  validation-qcow     - Build the core validation image and convert it to qcow2"
 	@echo "  validation-artifacts - Sync, build, validate, and emit raw+qcow2 artifacts"
+	@echo "  full-standard-artifacts - Build full-image prototype raw+qcow2 artifacts"
 	@echo "  release-audit       - Audit missing providers for a full standard image"
 	@echo ""
 	@echo "  full-sync           - Alias for nightly-arm64-sync"
@@ -291,6 +298,25 @@ validation-qcow: validation-image
 validation-artifacts: full-sync validation-image full-validate validation-qcow
 	cd "$$(dirname "$(VALIDATION_RAW_IMAGE)")" && sha256sum "$$(basename "$(VALIDATION_RAW_IMAGE)")" "$$(basename "$(VALIDATION_QCOW_IMAGE)")" > SHA256SUMS
 	@echo "✅ Validation artifacts ready in $$(dirname "$(VALIDATION_RAW_IMAGE)")"
+
+full-standard-image: bfs-fuse direct-package
+	@chmod +x $(CURDIR)/scripts/build-validated-desktop-image.sh
+	IMAGE_FLAVOR=full OUTPUT_DIR="$(FULL_OUTPUT_DIR)" OUTPUT_IMAGE="$(FULL_BUILD_IMAGE)" OUTPUT_HAIKU_HPKG="$(FULL_OUTPUT_DIR)/haiku-direct-full.hpkg" $(CURDIR)/scripts/build-validated-desktop-image.sh
+	@echo "✅ Full standard prototype raw image: $(FULL_BUILD_IMAGE)"
+
+full-standard-validate: bfs-fuse
+	@chmod +x $(CURDIR)/scripts/qemu-desktop-harness.sh
+	$(CURDIR)/scripts/qemu-desktop-harness.sh validate --timeout "$(FULL_VALIDATE_TIMEOUT_SECS)" --image "$(FULL_BUILD_IMAGE)"
+
+full-standard-qcow: full-standard-image
+	@mkdir -p "$$(dirname "$(FULL_QCOW_IMAGE)")"
+	qemu-img convert -f raw -O qcow2 "$(FULL_BUILD_IMAGE)" "$(FULL_QCOW_IMAGE)"
+	qemu-img info "$(FULL_QCOW_IMAGE)"
+	@echo "✅ Full standard prototype qcow2 image: $(FULL_QCOW_IMAGE)"
+
+full-standard-artifacts: full-sync full-standard-image full-standard-validate full-standard-qcow
+	cd "$(FULL_OUTPUT_DIR)" && sha256sum "$$(basename "$(FULL_BUILD_IMAGE)")" "$$(basename "$(FULL_QCOW_IMAGE)")" > SHA256SUMS
+	@echo "✅ Full standard prototype artifacts ready in $(FULL_OUTPUT_DIR)"
 
 release-audit: bfs-fuse direct-package
 	@chmod +x $(CURDIR)/scripts/audit-release-package-closure.sh

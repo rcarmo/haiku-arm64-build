@@ -129,7 +129,24 @@ GitHub Actions runs the validation-image flow only for pushed tags matching
 uploads the raw image, qcow2 image, and checksums as downloadable workflow
 artifacts.
 
-For the later full standard image, audit the remaining package closure with:
+For the full standard-image prototype, run:
+
+```sh
+make full-standard-artifacts HREV=59671 \
+  HAIKU_REMOTE=https://github.com/rcarmo/haiku.git \
+  HAIKU_BRANCH=arm64-bootstrap-fixes
+```
+
+This writes:
+
+- `/workspace/tmp/haiku-build/full/haiku-arm64-icu74-full.boot.img`
+- `/workspace/tmp/haiku-build/full/haiku-arm64-icu74-full.qcow2`
+- `/workspace/tmp/haiku-build/full/SHA256SUMS`
+
+The prototype keeps the regular direct `haiku.hpkg` package contents/metadata
+and validates in QEMU, but still carries a temporary local
+`release_requirements_shim` package until the remaining ARM64 HaikuPorts
+providers are built or imported. Audit that closure with:
 
 ```sh
 make release-audit
@@ -137,14 +154,15 @@ make release-audit
 
 This writes `/workspace/tmp/haiku-release-audit/summary.md` and records which
 regular-package requirements are already satisfied by the stock base/local
-packages and which ARM64 providers still need to be built or imported.
+packages and which ARM64 providers still need real packages.
 
 ```sh
 make bfs-fuse             # build/link host BFS FUSE helper at /workspace/tmp/bfs_fuse
 make full-sync            # alias for nightly-arm64-sync
 make full-stock-validate  # alias for stock-validate
 make full-image           # alias for desktop-image
-make validation-artifacts # build + validate raw image and emit qcow2 + SHA256SUMS
+make validation-artifacts # build + validate core raw image and emit qcow2 + SHA256SUMS
+make full-standard-artifacts # build + validate full prototype raw/qcow2 + SHA256SUMS
 make full-validate        # alias for desktop-validate
 make full-probe-overlays  # alias for desktop-probe-overlays
 make full-check           # run the full regression lane above in order
@@ -257,8 +275,8 @@ and writes both per-case validation logs and a Markdown/TSV summary under:
 ## Current priorities
 
 1. keep the core validation QEMU lane authoritative and boring
-2. build/import the missing ARM64 providers reported by `make release-audit`,
-   then add the second full standard image artifact lane
+2. replace the full standard prototype's temporary `release_requirements_shim`
+   by building/importing the missing ARM64 providers reported by `make release-audit`
 3. retire the remaining local `zstd_runtime` shim when upstream/local package
    coverage grows a real `libzstd` provider
 4. use the full-QEMU lane to sketch the driver scaffolding we will eventually

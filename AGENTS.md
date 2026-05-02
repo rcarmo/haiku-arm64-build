@@ -74,6 +74,7 @@ make full-sync
 make full-stock-validate
 make full-image
 make validation-artifacts HREV=<hrev-number> HAIKU_REMOTE=https://github.com/rcarmo/haiku.git HAIKU_BRANCH=arm64-bootstrap-fixes
+make full-standard-artifacts HREV=<hrev-number> HAIKU_REMOTE=https://github.com/rcarmo/haiku.git HAIKU_BRANCH=arm64-bootstrap-fixes
 make release-audit
 make full-refresh
 make full-probe-overlays
@@ -97,7 +98,7 @@ make orangepi6plus-efi-snapshot
 
 ## Authoritative scripts
 
-- `.github/workflows/validation-image.yml` — tag-only (`hrev*`) GitHub Actions build for raw+qcow2 validation artifacts
+- `.github/workflows/validation-image.yml` — tag-only (`hrev*`) GitHub Actions build for core and full-prototype raw+qcow2 artifacts on ARM64 runners
 - `make bfs-fuse` / Haiku `src/tools/bfs_shell` — host BFS FUSE helper bootstrap
 - `scripts/fetch-latest-arm64-nightly.sh`
 - `scripts/build-validated-desktop-image.sh`
@@ -113,8 +114,12 @@ it.
 
 As of 2026-04-30:
 
-- `make full-check` validates end-to-end in QEMU after `make bfs-fuse` creates
+- `make full-check` validates the core lane end-to-end in QEMU after `make bfs-fuse` creates
   `/workspace/tmp/bfs_fuse` from the host-built Haiku BFS FUSE helper
+- `make full-standard-artifacts` builds and validates a full standard-image
+  prototype with unpruned regular `haiku.hpkg` contents/metadata; it currently
+  carries a temporary local `release_requirements_shim` until the remaining
+  ARM64 HaikuPorts providers are real packages
 - stock ARM64 nightly validates in QEMU
 - the direct-package desktop lane validates in QEMU
 - the local arm64 `HAIKU_NO_DOWNLOADS=1` `@minimum-mmc` path builds and passes
@@ -156,6 +161,9 @@ Current overlay probe expectations use a 300s per-case timeout by default
 - `/workspace/tmp/haiku-build/validated/haiku-arm64-icu74-desktop.qcow2`
 - `/workspace/tmp/haiku-build/validated/SHA256SUMS`
 - `/workspace/tmp/haiku-build/validated/haiku-direct-icu74.hpkg`
+- `/workspace/tmp/haiku-build/full/haiku-arm64-icu74-full.boot.img`
+- `/workspace/tmp/haiku-build/full/haiku-arm64-icu74-full.qcow2`
+- `/workspace/tmp/haiku-build/full/SHA256SUMS`
 - `/workspace/tmp/haiku-build/validated/compat_bootstrap_runtime-1-2-arm64.hpkg`
 - `/workspace/tmp/haiku-build/validated/zstd_runtime-1.5.6-1-arm64.hpkg`
 

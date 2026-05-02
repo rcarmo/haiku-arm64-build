@@ -18,9 +18,12 @@ DEFAULT_OUTPUT_ZSTD_HPKG=$OUTPUT_DIR/zstd_runtime-1.5.6-1-arm64.hpkg
 ZSTD_HPKG=${ZSTD_HPKG:-$DEFAULT_OUTPUT_ZSTD_HPKG}
 BASH_HPKG=${BASH_HPKG:-$BUILD_DIR/objects/haiku/arm64/packaging/repositories/HaikuPortsCross-build/packages/bash_bootstrap-4.4.023-1-arm64.hpkg}
 COREUTILS_HPKG=${COREUTILS_HPKG:-$BUILD_DIR/objects/haiku/arm64/packaging/repositories/HaikuPortsCross-build/packages/coreutils_bootstrap-9.9-1-arm64.hpkg}
+IMAGE_FLAVOR=${IMAGE_FLAVOR:-validation}
 OUTPUT_IMAGE=${OUTPUT_IMAGE:-$OUTPUT_DIR/haiku-arm64-icu74-desktop.boot.img}
 OUTPUT_HAIKU_HPKG=${OUTPUT_HAIKU_HPKG:-$OUTPUT_DIR/haiku-direct-icu74.hpkg}
 OUTPUT_COMPAT_HPKG=${OUTPUT_COMPAT_HPKG:-$OUTPUT_DIR/compat_bootstrap_runtime-1-2-arm64.hpkg}
+EXPAT_HPKG=${EXPAT_HPKG:-$BUILD_DIR/objects/haiku/arm64/packaging/repositories/HaikuPortsCross-build/packages/expat_bootstrap-2.5.0-1-arm64.hpkg}
+OUTPUT_RELEASE_SHIM_HPKG=${OUTPUT_RELEASE_SHIM_HPKG:-$OUTPUT_DIR/release_requirements_shim-1-1-arm64.hpkg}
 MOUNT_POINT=${MOUNT_POINT:-/tmp/haiku-bfs-mount}
 OLD_MOUNT_POINT=${OLD_MOUNT_POINT:-/tmp/haiku-bfs-mount-old}
 SYSTEM_PARTITION_MIB=${SYSTEM_PARTITION_MIB:-512}
@@ -46,19 +49,22 @@ Current default base image:
     (managed by scripts/fetch-latest-arm64-nightly.sh)
 
 Package overlay behavior:
-  - modern rebootstrapped nightly base: add direct haiku + zstd_runtime
-    (generated locally from zstd_bootstrap's shared-library payload)
+  - IMAGE_FLAVOR=validation (default): add direct haiku + zstd_runtime and
+    prune the optional Cortex demo/metadata for the core validation lane.
+  - IMAGE_FLAVOR=full: keep the regular direct haiku package contents/metadata
+    intact, add zstd_runtime + expat_bootstrap, and add a temporary local
+    release_requirements_shim package for ARM64 providers that are still not
+    available locally. This is a full-image prototype, not a final upstream
+    package-quality release image.
   - legacy base: add direct haiku + compat_bootstrap_runtime
     + sanitized bash/coreutils bootstrap packages
-  - the validated direct package prunes the optional Cortex demo so it no longer
-    needs libexpat just to keep /boot/system solver-consistent
 
 Environment overrides:
   BASE_IMAGE, DIRECT_HAIKU_HPKG, DIRECT_HAIKU_CONTENTS_DIR,
   DIRECT_HAIKU_PACKAGE_INFO, ZSTD_SOURCE_HPKG, ZSTD_HPKG, BASH_HPKG,
-  COREUTILS_HPKG, OUTPUT_DIR, OUTPUT_IMAGE, OUTPUT_HAIKU_HPKG,
-  OUTPUT_COMPAT_HPKG, BUILD_DIR, PACKAGE_TOOL, BFS_SHELL, BFS_FUSE,
-  SYSTEM_PARTITION_MIB
+  COREUTILS_HPKG, EXPAT_HPKG, OUTPUT_DIR, OUTPUT_IMAGE, OUTPUT_HAIKU_HPKG,
+  OUTPUT_COMPAT_HPKG, OUTPUT_RELEASE_SHIM_HPKG, IMAGE_FLAVOR, BUILD_DIR,
+  PACKAGE_TOOL, BFS_SHELL, BFS_FUSE, SYSTEM_PARTITION_MIB
 EOF
 }
 
@@ -101,10 +107,18 @@ require_file "$DIRECT_HAIKU_PACKAGE_INFO"
 require_file "$BASH_HPKG"
 require_file "$COREUTILS_HPKG"
 
+case "$IMAGE_FLAVOR" in
+  validation|full) ;;
+  *) echo "unsupported IMAGE_FLAVOR: $IMAGE_FLAVOR" >&2; exit 1 ;;
+esac
+
 if [[ "$ZSTD_HPKG" == "$DEFAULT_OUTPUT_ZSTD_HPKG" ]]; then
   require_file "$ZSTD_SOURCE_HPKG"
 else
   require_file "$ZSTD_HPKG"
+fi
+if [[ "$IMAGE_FLAVOR" == "full" ]]; then
+  require_file "$EXPAT_HPKG"
 fi
 
 EFFECTIVE_BASH_HPKG="$BASH_HPKG"
@@ -189,6 +203,52 @@ EOF
   "$PACKAGE_TOOL" create -0 -C "$stage_dir" -i "$package_info" "$ZSTD_HPKG" >/dev/null
 }
 
+create_release_requirements_shim_package() {
+  local stage_dir="$WORK_DIR/release-requirements-shim"
+  local package_info="$WORK_DIR/release-requirements-shim.PackageInfo"
+  rm -rf "$stage_dir"
+  mkdir -p "$stage_dir/documentation/packages/release_requirements_shim"
+  cat > "$stage_dir/documentation/packages/release_requirements_shim/README" <<'EOF'
+Temporary ARM64 full-image dependency shim.
+
+This package exists to let the full-image prototype carry the unpruned regular
+haiku.hpkg while the ARM64 HaikuPorts package closure is being completed. Replace
+this package with real providers before treating the full image as a final
+standard release image.
+EOF
+
+  cat > "$package_info" <<'EOF'
+name	release_requirements_shim
+version	1-1
+summary	"Temporary ARM64 full-image dependency shim"
+description	"Temporary dependency shim for the ARM64 full-image prototype. Replace with real HaikuPorts providers before a final standard release image."
+vendor	"Local"
+packager	"Local"
+architecture	arm64
+copyrights	"2026 Local"
+licenses	{
+	MIT
+}
+provides	{
+	release_requirements_shim=1
+	cmd:bunzip2=1
+	cmd:gunzip=1
+	cmd:tar=1
+	cmd:unzip=1
+	intel_wifi_firmwares=1
+	noto_sans_cjk_jp=1
+	ralink_wifi_firmwares=1
+	realtek_wifi_firmwares=1
+}
+requires	{
+	haiku
+}
+flags	system_package
+EOF
+
+  "$PACKAGE_TOOL" create -0 -C "$stage_dir" -i "$package_info" "$OUTPUT_RELEASE_SHIM_HPKG" >/dev/null
+}
+
 create_compat_package() {
   rm -rf "$COMPAT_STAGE"
   mkdir -p "$COMPAT_STAGE/lib"
@@ -243,10 +303,11 @@ create_haiku_package() {
   mkdir -p "$stage_dir"
   cp -a "$DIRECT_HAIKU_CONTENTS_DIR/." "$stage_dir/"
 
-  rm -f "$stage_dir/demos/Cortex" "$stage_dir/data/deskbar/menu/Demos/Cortex"
-
   cp "$DIRECT_HAIKU_PACKAGE_INFO" "$package_info_copy"
-  python3 - "$package_info_copy" <<'PY'
+
+  if [[ "$IMAGE_FLAVOR" == "validation" ]]; then
+    rm -f "$stage_dir/demos/Cortex" "$stage_dir/data/deskbar/menu/Demos/Cortex"
+    python3 - "$package_info_copy" <<'PY'
 from pathlib import Path
 import sys
 p = Path(sys.argv[1])
@@ -265,6 +326,7 @@ lines = p.read_text().splitlines()
 filtered = [line for line in lines if line.strip() not in remove]
 p.write_text('\n'.join(filtered) + '\n')
 PY
+  fi
   "$PACKAGE_TOOL" create -0 -C "$stage_dir" -i "$package_info_copy" "$OUTPUT_HAIKU_HPKG"
 }
 
@@ -366,7 +428,7 @@ PY
   fi
 
   find "$pkgdir" -maxdepth 1 -type f \
-    \( -name 'haiku-*.hpkg' -o -name 'compat_bootstrap_runtime-*.hpkg' -o -name 'expat_bootstrap-*.hpkg' -o -name 'zstd_bootstrap-*.hpkg' -o -name 'zstd_runtime-*.hpkg' \) \
+    \( -name 'haiku-*.hpkg' -o -name 'compat_bootstrap_runtime-*.hpkg' -o -name 'expat_bootstrap-*.hpkg' -o -name 'release_requirements_shim-*.hpkg' -o -name 'zstd_bootstrap-*.hpkg' -o -name 'zstd_runtime-*.hpkg' \) \
     -delete
 
   if (( modern_base_deps )); then
@@ -374,6 +436,16 @@ PY
           "$pkgdir/coreutils_bootstrap-9.9-1-arm64.hpkg"
     cp "$OUTPUT_HAIKU_HPKG" "$pkgdir/$(basename "$OUTPUT_HAIKU_HPKG")"
     cp "$ZSTD_HPKG" "$pkgdir/"
+    if [[ "$IMAGE_FLAVOR" == "full" ]]; then
+      cp "$EXPAT_HPKG" "$pkgdir/"
+      cp "$OUTPUT_RELEASE_SHIM_HPKG" "$pkgdir/"
+      # The regular package set includes FirstBootPrompt. In unattended QEMU
+      # validation it races with the marker launch jobs and can trip
+      # "Can't reconnect to app server!" debugger calls. Seed the normal locale
+      # settings sentinel so the standard image boots directly to the desktop.
+      mkdir -p "$MOUNT_POINT/myfs/home/config/settings"
+      : > "$MOUNT_POINT/myfs/home/config/settings/Locale settings"
+    fi
   else
     rm -f "$pkgdir/gcc_syslibs-13.2.0_2023_08_10-1-arm64.hpkg" \
           "$pkgdir/icu-67.1-2-arm64.hpkg" \
@@ -412,14 +484,23 @@ fi
 echo "== building compat runtime package =="
 create_compat_package
 
-echo "== building ICU74-consistent haiku package =="
+if [[ "$IMAGE_FLAVOR" == "full" ]]; then
+  echo "== building full-image release requirements shim package =="
+  create_release_requirements_shim_package
+fi
+
+echo "== building ICU74-consistent haiku package ($IMAGE_FLAVOR) =="
 create_haiku_package
 
 echo "== assembling validated boot image =="
 assemble_image
 
 echo
-ls -lh "$ZSTD_HPKG" "$OUTPUT_COMPAT_HPKG" "$OUTPUT_HAIKU_HPKG" "$OUTPUT_IMAGE"
+if [[ "$IMAGE_FLAVOR" == "full" ]]; then
+  ls -lh "$ZSTD_HPKG" "$OUTPUT_COMPAT_HPKG" "$OUTPUT_RELEASE_SHIM_HPKG" "$OUTPUT_HAIKU_HPKG" "$OUTPUT_IMAGE"
+else
+  ls -lh "$ZSTD_HPKG" "$OUTPUT_COMPAT_HPKG" "$OUTPUT_HAIKU_HPKG" "$OUTPUT_IMAGE"
+fi
 echo
 echo "validated zstd package: $ZSTD_HPKG"
 echo "validated image: $OUTPUT_IMAGE"
