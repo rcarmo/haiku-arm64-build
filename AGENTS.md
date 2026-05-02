@@ -74,6 +74,7 @@ make full-sync
 make full-stock-validate
 make full-image
 make validation-artifacts HREV=<hrev-number> HAIKU_REMOTE=https://github.com/rcarmo/haiku.git HAIKU_BRANCH=arm64-bootstrap-fixes
+make release-audit
 make full-refresh
 make full-probe-overlays
 make full-run
@@ -101,6 +102,7 @@ make orangepi6plus-efi-snapshot
 - `scripts/fetch-latest-arm64-nightly.sh`
 - `scripts/build-validated-desktop-image.sh`
 - `scripts/probe-direct-package-overlays.sh`
+- `scripts/audit-release-package-closure.sh`
 - `scripts/qemu-desktop-harness.sh`
 - `scripts/snapshot-orangepi6plus-efi.sh` (historical local-host snapshot helper)
 

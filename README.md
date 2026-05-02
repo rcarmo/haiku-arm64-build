@@ -125,8 +125,19 @@ This writes:
 - `/workspace/tmp/haiku-build/validated/SHA256SUMS`
 
 GitHub Actions runs the validation-image flow only for pushed tags matching
-`hrev*` (for example `hrev59671`) and uploads the raw image, qcow2 image, and
-checksums as downloadable workflow artifacts.
+`hrev*` (for example `hrev59671`) on GitHub-hosted ARM64 Linux runners and
+uploads the raw image, qcow2 image, and checksums as downloadable workflow
+artifacts.
+
+For the later full standard image, audit the remaining package closure with:
+
+```sh
+make release-audit
+```
+
+This writes `/workspace/tmp/haiku-release-audit/summary.md` and records which
+regular-package requirements are already satisfied by the stock base/local
+packages and which ARM64 providers still need to be built or imported.
 
 ```sh
 make bfs-fuse             # build/link host BFS FUSE helper at /workspace/tmp/bfs_fuse
@@ -245,10 +256,12 @@ and writes both per-case validation logs and a Markdown/TSV summary under:
 
 ## Current priorities
 
-1. keep the full direct-package QEMU lane authoritative and boring
-2. retire the remaining local `zstd_runtime` shim when upstream/local package
+1. keep the core validation QEMU lane authoritative and boring
+2. build/import the missing ARM64 providers reported by `make release-audit`,
+   then add the second full standard image artifact lane
+3. retire the remaining local `zstd_runtime` shim when upstream/local package
    coverage grows a real `libzstd` provider
-3. use the full-QEMU lane to sketch the driver scaffolding we will eventually
+4. use the full-QEMU lane to sketch the driver scaffolding we will eventually
    need for Orange Pi 4 Pro bring-up, starting with:
    - FDT/board hooks
    - early serial + interrupt + timer plumbing

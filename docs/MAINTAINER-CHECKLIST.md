@@ -123,6 +123,13 @@ Current probe expectations use a 300s per-case timeout by default
 - generated zstd runtime package:
   `/workspace/tmp/haiku-build/validated/zstd_runtime-1.5.6-1-arm64.hpkg`
 
+### Release/full-image audit outputs
+
+- package-closure audit summary:
+  `/workspace/tmp/haiku-release-audit/summary.md`
+- package-closure audit TSV:
+  `/workspace/tmp/haiku-release-audit/summary.tsv`
+
 ### Harness output
 
 - run/validate logs:
@@ -203,6 +210,17 @@ make full-probe-overlays
 ```
 
 and verify `summary.md` matches the intended expectation matrix.
+
+### If you change `scripts/audit-release-package-closure.sh`
+
+Run:
+
+```sh
+make release-audit
+```
+
+and verify `/workspace/tmp/haiku-release-audit/summary.md` reports the expected
+available/missing providers for the full standard image lane.
 
 ### If you change `scripts/snapshot-orangepi6plus-efi.sh` or local host boot-reference assumptions
 

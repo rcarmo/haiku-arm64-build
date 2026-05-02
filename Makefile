@@ -34,7 +34,7 @@ ORANGEPI6PLUS_EFI_ESP_DEV := /dev/nvme0n1p1
 	nightly-arm64-sync stock-validate desktop-refresh desktop-probe-overlays \
 	desktop-image desktop-run desktop-stop desktop-status desktop-logs desktop-attach \
 	desktop-capture desktop-screenshot desktop-validate \
-	validation-image validation-qcow validation-artifacts \
+	validation-image validation-qcow validation-artifacts release-audit \
 	full-sync full-stock-validate full-image full-refresh full-probe-overlays \
 	full-run full-stop full-status full-logs full-attach full-capture \
 	full-screenshot full-validate full-check orangepi6plus-efi-snapshot
@@ -68,6 +68,7 @@ help:
 	@echo "  validation-image    - Build the core validation raw image"
 	@echo "  validation-qcow     - Build the core validation image and convert it to qcow2"
 	@echo "  validation-artifacts - Sync, build, validate, and emit raw+qcow2 artifacts"
+	@echo "  release-audit       - Audit missing providers for a full standard image"
 	@echo ""
 	@echo "  full-sync           - Alias for nightly-arm64-sync"
 	@echo "  full-stock-validate - Alias for stock-validate"
@@ -290,6 +291,10 @@ validation-qcow: validation-image
 validation-artifacts: full-sync validation-image full-validate validation-qcow
 	cd "$$(dirname "$(VALIDATION_RAW_IMAGE)")" && sha256sum "$$(basename "$(VALIDATION_RAW_IMAGE)")" "$$(basename "$(VALIDATION_QCOW_IMAGE)")" > SHA256SUMS
 	@echo "✅ Validation artifacts ready in $$(dirname "$(VALIDATION_RAW_IMAGE)")"
+
+release-audit: bfs-fuse direct-package
+	@chmod +x $(CURDIR)/scripts/audit-release-package-closure.sh
+	$(CURDIR)/scripts/audit-release-package-closure.sh
 
 full-sync: nightly-arm64-sync
 full-stock-validate: stock-validate
