@@ -73,6 +73,7 @@ make bfs-fuse
 make full-sync
 make full-stock-validate
 make full-image
+make validation-artifacts HREV=<hrev-number> HAIKU_REMOTE=https://github.com/rcarmo/haiku.git HAIKU_BRANCH=arm64-bootstrap-fixes
 make full-refresh
 make full-probe-overlays
 make full-run
@@ -95,6 +96,7 @@ make orangepi6plus-efi-snapshot
 
 ## Authoritative scripts
 
+- `.github/workflows/validation-image.yml` — tag-only (`hrev*`) GitHub Actions build for raw+qcow2 validation artifacts
 - `make bfs-fuse` / Haiku `src/tools/bfs_shell` — host BFS FUSE helper bootstrap
 - `scripts/fetch-latest-arm64-nightly.sh`
 - `scripts/build-validated-desktop-image.sh`
@@ -149,6 +151,8 @@ Current overlay probe expectations use a 300s per-case timeout by default
 ### Built outputs
 
 - `/workspace/tmp/haiku-build/validated/haiku-arm64-icu74-desktop.boot.img`
+- `/workspace/tmp/haiku-build/validated/haiku-arm64-icu74-desktop.qcow2`
+- `/workspace/tmp/haiku-build/validated/SHA256SUMS`
 - `/workspace/tmp/haiku-build/validated/haiku-direct-icu74.hpkg`
 - `/workspace/tmp/haiku-build/validated/compat_bootstrap_runtime-1-2-arm64.hpkg`
 - `/workspace/tmp/haiku-build/validated/zstd_runtime-1.5.6-1-arm64.hpkg`

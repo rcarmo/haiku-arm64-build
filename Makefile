@@ -4,13 +4,21 @@
 HAIKU_DIR     := $(CURDIR)/haiku
 BUILD_DIR     := $(HAIKU_DIR)/generated.arm64
 BUILDTOOLS_DIR := $(CURDIR)/buildtools
+HAIKU_REMOTE  ?= https://review.haiku-os.org/haiku
+HAIKU_BRANCH  ?=
+BUILDTOOLS_REMOTE ?= https://review.haiku-os.org/buildtools
+BUILDTOOLS_BRANCH ?=
 NPROC         := $(shell nproc)
 IMAGE         := $(BUILD_DIR)/haiku-mmc.image
+HREV          ?=
 NIGHTLY_DIR   := /workspace/tmp/haiku-nightly-arm64
 NIGHTLY_BASE_IMAGE := $(NIGHTLY_DIR)/haiku-master-arm64-current-mmc.image
+NIGHTLY_SYNC_ARGS := $(if $(HREV),--hrev $(HREV),)
 DESKTOP_BUILD_IMAGE := /workspace/tmp/haiku-build/validated/haiku-arm64-icu74-desktop.boot.img
 DESKTOP_RUN_IMAGE := $(DESKTOP_BUILD_IMAGE)
 DESKTOP_VALIDATE_IMAGE := $(DESKTOP_BUILD_IMAGE)
+VALIDATION_RAW_IMAGE := $(DESKTOP_BUILD_IMAGE)
+VALIDATION_QCOW_IMAGE := /workspace/tmp/haiku-build/validated/haiku-arm64-icu74-desktop.qcow2
 DESKTOP_HARNESS_DIR := /workspace/tmp/haiku-boot-harness
 DESKTOP_TMUX_SESSION := haiku-desktop
 DESKTOP_STATE_FILE := $(DESKTOP_HARNESS_DIR)/$(DESKTOP_TMUX_SESSION).state
@@ -22,10 +30,11 @@ BFS_FUSE_BUILT := $(BUILD_DIR)/objects/linux/arm64/release/tools/bfs_shell/bfs_f
 ORANGEPI6PLUS_EFI_SNAPSHOT_DIR := /workspace/tmp/orangepi6plus-efi-snapshot/latest
 ORANGEPI6PLUS_EFI_ESP_DEV := /dev/nvme0n1p1
 
-.PHONY: all toolchain image clean update test help bfs-fuse \
+.PHONY: all deps clone jam toolchain direct-package image clean update test help bfs-fuse \
 	nightly-arm64-sync stock-validate desktop-refresh desktop-probe-overlays \
 	desktop-image desktop-run desktop-stop desktop-status desktop-logs desktop-attach \
 	desktop-capture desktop-screenshot desktop-validate \
+	validation-image validation-qcow validation-artifacts \
 	full-sync full-stock-validate full-image full-refresh full-probe-overlays \
 	full-run full-stop full-status full-logs full-attach full-capture \
 	full-screenshot full-validate full-check orangepi6plus-efi-snapshot
@@ -38,6 +47,7 @@ help:
 	@echo "  clone      - Clone/update haiku + buildtools repos"
 	@echo "  toolchain  - Build cross-compiler toolchain"
 	@echo "  bfs-fuse   - Build/link the host BFS FUSE helper used by validation scripts"
+	@echo "  direct-package - Build the regular direct haiku.hpkg used by validation images"
 	@echo "  image      - Build MMC image (default: @minimum-mmc)"
 	@echo "  raw        - Build raw images (esp.image + haiku-minimum.image)"
 	@echo "  test       - Quick QEMU smoke test (30s)"
@@ -55,6 +65,9 @@ help:
 	@echo "  desktop-capture    - Blocking convenience target: run + wait + screenshot"
 	@echo "  desktop-stop       - Stop the detached desktop tmux session"
 	@echo "  desktop-validate   - Headless marker-based desktop validation harness"
+	@echo "  validation-image    - Build the core validation raw image"
+	@echo "  validation-qcow     - Build the core validation image and convert it to qcow2"
+	@echo "  validation-artifacts - Sync, build, validate, and emit raw+qcow2 artifacts"
 	@echo ""
 	@echo "  full-sync           - Alias for nightly-arm64-sync"
 	@echo "  full-stock-validate - Alias for stock-validate"
@@ -82,34 +95,37 @@ deps:
 	sudo apt-get install -y \
 		git nasm bc autoconf automake texinfo flex bison gawk \
 		build-essential unzip wget zip zlib1g-dev libzstd-dev \
-		xorriso mtools u-boot-tools python3 attr \
-		qemu-system-arm qemu-efi-aarch64 qemu-system-data ipxe-qemu
-	@# Build jam if not present
-	@if ! command -v jam >/dev/null 2>&1; then \
-		echo "Building jam..."; \
-		cd $(BUILDTOOLS_DIR)/jam && make -j$(NPROC) && sudo ./jam0 install; \
-	fi
+		xorriso mtools u-boot-tools python3 attr libfuse-dev fuse \
+		qemu-system-arm qemu-efi-aarch64 qemu-system-data qemu-utils ipxe-qemu
 	@echo "✅ Dependencies installed"
 
 clone:
 	@if [ ! -d $(HAIKU_DIR)/.git ]; then \
-		echo "Cloning haiku..."; \
-		git clone https://review.haiku-os.org/haiku $(HAIKU_DIR); \
+		echo "Cloning haiku from $(HAIKU_REMOTE)..."; \
+		git clone $(if $(HAIKU_BRANCH),--branch $(HAIKU_BRANCH),) $(HAIKU_REMOTE) $(HAIKU_DIR); \
 	fi
 	@if [ ! -d $(BUILDTOOLS_DIR)/.git ]; then \
-		echo "Cloning buildtools..."; \
-		git clone https://review.haiku-os.org/buildtools $(BUILDTOOLS_DIR); \
+		echo "Cloning buildtools from $(BUILDTOOLS_REMOTE)..."; \
+		git clone $(if $(BUILDTOOLS_BRANCH),--branch $(BUILDTOOLS_BRANCH),) $(BUILDTOOLS_REMOTE) $(BUILDTOOLS_DIR); \
 	fi
 	@echo "✅ Repos ready"
 	@echo "  haiku:      $$(cd $(HAIKU_DIR) && git log -1 --oneline)"
 	@echo "  buildtools: $$(cd $(BUILDTOOLS_DIR) && git log -1 --oneline)"
+
+jam: clone
+	@if ! command -v jam >/dev/null 2>&1; then \
+		echo "Building jam..."; \
+		cd $(BUILDTOOLS_DIR)/jam && make -j$(NPROC) && sudo ./jam0 install; \
+	else \
+		echo "✅ jam already exists"; \
+	fi
 
 update:
 	cd $(HAIKU_DIR) && git pull --ff-only
 	cd $(BUILDTOOLS_DIR) && git pull --ff-only
 	@echo "✅ Updated"
 
-toolchain: clone
+toolchain: jam
 	@if [ ! -f $(BUILD_DIR)/cross-tools-arm64/bin/aarch64-unknown-haiku-gcc ]; then \
 		echo "Building ARM64 cross-toolchain..."; \
 		mkdir -p $(BUILD_DIR); \
@@ -127,6 +143,11 @@ bfs-fuse: toolchain
 	ln -sf "$(BFS_FUSE_BUILT)" "$(BFS_FUSE)"
 	@test -x "$(BFS_FUSE)"
 	@echo "✅ BFS FUSE helper linked: $(BFS_FUSE) -> $(BFS_FUSE_BUILT)"
+
+direct-package: toolchain
+	cd $(BUILD_DIR) && jam -j$(NPROC) -q haiku.hpkg
+	@test -f "$(BUILD_DIR)/objects/haiku/arm64/packaging/packages/haiku.hpkg"
+	@echo "✅ Direct haiku package built: $(BUILD_DIR)/objects/haiku/arm64/packaging/packages/haiku.hpkg"
 
 image: toolchain
 	cd $(BUILD_DIR) && jam -j$(NPROC) -q @minimum-mmc
@@ -174,13 +195,13 @@ bootstrap: toolchain
 
 nightly-arm64-sync:
 	@chmod +x $(CURDIR)/scripts/fetch-latest-arm64-nightly.sh
-	@$(CURDIR)/scripts/fetch-latest-arm64-nightly.sh
+	@$(CURDIR)/scripts/fetch-latest-arm64-nightly.sh $(NIGHTLY_SYNC_ARGS)
 
 stock-validate: nightly-arm64-sync bfs-fuse
 	@chmod +x $(CURDIR)/scripts/qemu-desktop-harness.sh
 	$(CURDIR)/scripts/qemu-desktop-harness.sh validate --image "$(NIGHTLY_BASE_IMAGE)"
 
-desktop-image: bfs-fuse
+desktop-image: bfs-fuse direct-package
 	@chmod +x $(CURDIR)/scripts/build-validated-desktop-image.sh
 	BASE_IMAGE="$(NIGHTLY_BASE_IMAGE)" OUTPUT_IMAGE="$(DESKTOP_BUILD_IMAGE)" $(CURDIR)/scripts/build-validated-desktop-image.sh
 
@@ -256,6 +277,19 @@ desktop-screenshot:
 desktop-validate: bfs-fuse
 	@chmod +x $(CURDIR)/scripts/qemu-desktop-harness.sh
 	$(CURDIR)/scripts/qemu-desktop-harness.sh validate --timeout "$(DESKTOP_VALIDATE_TIMEOUT_SECS)" --image "$(DESKTOP_VALIDATE_IMAGE)"
+
+validation-image: desktop-image
+	@echo "✅ Core validation raw image: $(VALIDATION_RAW_IMAGE)"
+
+validation-qcow: validation-image
+	@mkdir -p "$$(dirname "$(VALIDATION_QCOW_IMAGE)")"
+	qemu-img convert -f raw -O qcow2 "$(VALIDATION_RAW_IMAGE)" "$(VALIDATION_QCOW_IMAGE)"
+	qemu-img info "$(VALIDATION_QCOW_IMAGE)"
+	@echo "✅ Core validation qcow2 image: $(VALIDATION_QCOW_IMAGE)"
+
+validation-artifacts: full-sync validation-image full-validate validation-qcow
+	cd "$$(dirname "$(VALIDATION_RAW_IMAGE)")" && sha256sum "$$(basename "$(VALIDATION_RAW_IMAGE)")" "$$(basename "$(VALIDATION_QCOW_IMAGE)")" > SHA256SUMS
+	@echo "✅ Validation artifacts ready in $$(dirname "$(VALIDATION_RAW_IMAGE)")"
 
 full-sync: nightly-arm64-sync
 full-stock-validate: stock-validate

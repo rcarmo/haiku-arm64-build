@@ -56,11 +56,18 @@ or just:
 make full-check
 ```
 
+When you need downloadable artifacts, run:
+
+```sh
+make validation-artifacts HREV=<hrev-number> HAIKU_REMOTE=https://github.com/rcarmo/haiku.git HAIKU_BRANCH=arm64-bootstrap-fixes
+```
+
 If all of those pass, the current lane is healthy. `make full-check` now reaches
 `make bfs-fuse` through the validation/image prerequisites, so a cleaned
 `/workspace/tmp/bfs_fuse` symlink is recreated from the host-built Haiku
-`bfs_fuse` helper before any BFS partition mounting. The older `desktop-*`
-target names still exist as compatibility aliases.
+`bfs_fuse` helper before any BFS partition mounting. Use `make validation-artifacts`
+when you need the downloadable raw image, qcow2 image, and `SHA256SUMS`. The
+older `desktop-*` target names still exist as compatibility aliases.
 
 ## Expected current state
 
@@ -103,8 +110,12 @@ Current probe expectations use a 300s per-case timeout by default
 
 ### Built validated outputs
 
-- validated desktop image:
+- validated desktop raw image:
   `/workspace/tmp/haiku-build/validated/haiku-arm64-icu74-desktop.boot.img`
+- validated desktop qcow2 image:
+  `/workspace/tmp/haiku-build/validated/haiku-arm64-icu74-desktop.qcow2`
+- validation artifact checksums:
+  `/workspace/tmp/haiku-build/validated/SHA256SUMS`
 - rebuilt direct package:
   `/workspace/tmp/haiku-build/validated/haiku-direct-icu74.hpkg`
 - legacy fallback compat package:

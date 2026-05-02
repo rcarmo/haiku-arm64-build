@@ -1,0 +1,102 @@
+name: Build ARM64 validation image
+
+on:
+  push:
+    tags:
+      - 'hrev*'
+
+permissions:
+  contents: read
+
+jobs:
+  validation-image:
+    name: Validation image (${{ github.ref_name }})
+    # The Haiku ARM64 bootstrap/toolchain flow is host-architecture sensitive.
+    # Use GitHub-hosted ARM64 Linux runners, not x86_64 runners with emulation.
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 360
+
+    steps:
+      - name: Check out automation repo
+        uses: actions/checkout@v4
+
+      - name: Prepare workspace paths
+        run: |
+          sudo mkdir -p /workspace/tmp
+          sudo chown -R "$USER:$USER" /workspace
+          sudo modprobe fuse || true
+          if [ -e /dev/fuse ]; then sudo chmod 666 /dev/fuse; fi
+
+      - name: Install dependencies
+        run: make deps
+
+      - name: Derive Haiku revision from tag
+        id: hrev
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          hrev="${tag#hrev}"
+          if ! printf '%s' "$hrev" | grep -Eq '^[0-9]+$'; then
+            echo "Tag must be hrevNNNNN, got: $tag" >&2
+            exit 1
+          fi
+          echo "hrev=$hrev" >> "$GITHUB_OUTPUT"
+          echo "Building Haiku ARM64 validation image for hrev$hrev"
+
+      - name: Build and validate raw + qcow2 images
+        run: |
+          make validation-artifacts \
+            HREV="${{ steps.hrev.outputs.hrev }}" \
+            HAIKU_REMOTE=https://github.com/rcarmo/haiku.git \
+            HAIKU_BRANCH=arm64-bootstrap-fixes
+
+      - name: Summarize artifacts
+        run: |
+          ARTIFACT_DIR=/workspace/tmp/haiku-build/validated
+          {
+            echo "## Haiku ARM64 validation image"
+            echo
+            echo "Tag: \`${GITHUB_REF_NAME}\`"
+            echo "Revision: \`hrev${{ steps.hrev.outputs.hrev }}\`"
+            echo
+            echo "### Files"
+            echo
+            ls -lh "$ARTIFACT_DIR"/haiku-arm64-icu74-desktop.boot.img \
+                   "$ARTIFACT_DIR"/haiku-arm64-icu74-desktop.qcow2 \
+                   "$ARTIFACT_DIR"/SHA256SUMS
+            echo
+            echo "### qcow2 info"
+            echo
+            echo '```'
+            qemu-img info "$ARTIFACT_DIR/haiku-arm64-icu74-desktop.qcow2"
+            echo '```'
+            echo
+            echo "### SHA256"
+            echo
+            echo '```'
+            cat "$ARTIFACT_DIR/SHA256SUMS"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload validation image artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: haiku-arm64-validation-${{ github.ref_name }}
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+          path: |
+            /workspace/tmp/haiku-build/validated/haiku-arm64-icu74-desktop.boot.img
+            /workspace/tmp/haiku-build/validated/haiku-arm64-icu74-desktop.qcow2
+            /workspace/tmp/haiku-build/validated/SHA256SUMS
+
+      - name: Upload validation logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: haiku-arm64-validation-logs-${{ github.ref_name }}
+          if-no-files-found: ignore
+          retention-days: 14
+          path: |
+            /workspace/tmp/haiku-boot-harness/*.validate.log
+            /workspace/tmp/haiku-boot-harness/*.serial.log
+            /workspace/tmp/haiku-build/validated/work-*/*.log

@@ -110,11 +110,30 @@ For later regression work, the repo now includes a small QEMU desktop harness.
 The new `full-*` targets are the preferred names for the authoritative full-QEMU
 lane; the older `desktop-*` names remain as compatibility aliases.
 
+The core validation image can also be emitted as both raw and qcow2 artifacts:
+
+```sh
+make validation-artifacts HREV=59671 \
+  HAIKU_REMOTE=https://github.com/rcarmo/haiku.git \
+  HAIKU_BRANCH=arm64-bootstrap-fixes
+```
+
+This writes:
+
+- `/workspace/tmp/haiku-build/validated/haiku-arm64-icu74-desktop.boot.img`
+- `/workspace/tmp/haiku-build/validated/haiku-arm64-icu74-desktop.qcow2`
+- `/workspace/tmp/haiku-build/validated/SHA256SUMS`
+
+GitHub Actions runs the validation-image flow only for pushed tags matching
+`hrev*` (for example `hrev59671`) and uploads the raw image, qcow2 image, and
+checksums as downloadable workflow artifacts.
+
 ```sh
 make bfs-fuse             # build/link host BFS FUSE helper at /workspace/tmp/bfs_fuse
 make full-sync            # alias for nightly-arm64-sync
 make full-stock-validate  # alias for stock-validate
 make full-image           # alias for desktop-image
+make validation-artifacts # build + validate raw image and emit qcow2 + SHA256SUMS
 make full-validate        # alias for desktop-validate
 make full-probe-overlays  # alias for desktop-probe-overlays
 make full-check           # run the full regression lane above in order
