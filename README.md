@@ -129,6 +129,17 @@ GitHub Actions runs the validation-image flow only for pushed tags matching
 uploads the raw image, qcow2 image, and checksums as downloadable workflow
 artifacts.
 
+For a UTM/iOS-friendly minimum bootstrap-style qcow2, run:
+
+```sh
+make utm-ios-smoke
+```
+
+This writes `/workspace/tmp/haiku-build/utm-ios/haiku-arm64-minimum-utm-ios.qcow2`
+and smoke-tests it with QEMU `virt` using USB storage. In UTM for iOS, attach it
+as a **USB** disk rather than VirtIO; the current minimum image reaches the
+kernel via VirtIO but cannot rediscover the boot partition there.
+
 For the full standard-image prototype, run:
 
 ```sh

@@ -75,6 +75,7 @@ make full-stock-validate
 make full-image
 make validation-artifacts HREV=<hrev-number> HAIKU_REMOTE=https://github.com/rcarmo/haiku.git HAIKU_BRANCH=arm64-bootstrap-fixes
 make full-standard-artifacts HREV=<hrev-number> HAIKU_REMOTE=https://github.com/rcarmo/haiku.git HAIKU_BRANCH=arm64-bootstrap-fixes
+make utm-ios-smoke
 make release-audit
 make full-refresh
 make full-probe-overlays
@@ -120,6 +121,10 @@ As of 2026-04-30:
   prototype with unpruned regular `haiku.hpkg` contents/metadata; it currently
   carries a temporary local `release_requirements_shim` until the remaining
   ARM64 HaikuPorts providers are real packages
+- `make utm-ios-smoke` builds `/workspace/tmp/haiku-build/utm-ios/haiku-arm64-minimum-utm-ios.qcow2`
+  and smoke-tests it with QEMU `virt` using USB storage; for UTM/iOS attach the
+  qcow2 as USB storage, not VirtIO, because the current minimum image cannot
+  rediscover the boot partition via VirtIO
 - stock ARM64 nightly validates in QEMU
 - the direct-package desktop lane validates in QEMU
 - the local arm64 `HAIKU_NO_DOWNLOADS=1` `@minimum-mmc` path builds and passes

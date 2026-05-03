@@ -23,6 +23,9 @@ FULL_OUTPUT_DIR := /workspace/tmp/haiku-build/full
 FULL_BUILD_IMAGE := $(FULL_OUTPUT_DIR)/haiku-arm64-icu74-full.boot.img
 FULL_QCOW_IMAGE := $(FULL_OUTPUT_DIR)/haiku-arm64-icu74-full.qcow2
 FULL_VALIDATE_TIMEOUT_SECS := 900
+UTM_IOS_DIR := /workspace/tmp/haiku-build/utm-ios
+UTM_IOS_BOOTSTRAP_QCOW := $(UTM_IOS_DIR)/haiku-arm64-minimum-utm-ios.qcow2
+UTM_IOS_BOOTSTRAP_LOG := $(UTM_IOS_DIR)/qemu-minimum-qcow-usb-smoke.log
 DESKTOP_HARNESS_DIR := /workspace/tmp/haiku-boot-harness
 DESKTOP_TMUX_SESSION := haiku-desktop
 DESKTOP_STATE_FILE := $(DESKTOP_HARNESS_DIR)/$(DESKTOP_TMUX_SESSION).state
@@ -40,7 +43,7 @@ ORANGEPI6PLUS_EFI_ESP_DEV := /dev/nvme0n1p1
 	desktop-capture desktop-screenshot desktop-validate \
 	validation-image validation-qcow validation-artifacts \
 	full-standard-image full-standard-validate full-standard-qcow full-standard-artifacts \
-	release-audit \
+	utm-ios-bootstrap utm-ios-smoke release-audit \
 	full-sync full-stock-validate full-image full-refresh full-probe-overlays \
 	full-run full-stop full-status full-logs full-attach full-capture \
 	full-screenshot full-validate full-check orangepi6plus-efi-snapshot
@@ -75,6 +78,8 @@ help:
 	@echo "  validation-qcow     - Build the core validation image and convert it to qcow2"
 	@echo "  validation-artifacts - Sync, build, validate, and emit raw+qcow2 artifacts"
 	@echo "  full-standard-artifacts - Build full-image prototype raw+qcow2 artifacts"
+	@echo "  utm-ios-bootstrap  - Build UTM/iOS-friendly minimum qcow2 image"
+	@echo "  utm-ios-smoke      - Smoke-test the UTM/iOS qcow2 via QEMU USB storage"
 	@echo "  release-audit       - Audit missing providers for a full standard image"
 	@echo ""
 	@echo "  full-sync           - Alias for nightly-arm64-sync"
@@ -317,6 +322,27 @@ full-standard-qcow: full-standard-image
 full-standard-artifacts: full-sync full-standard-image full-standard-validate full-standard-qcow
 	cd "$(FULL_OUTPUT_DIR)" && sha256sum "$$(basename "$(FULL_BUILD_IMAGE)")" "$$(basename "$(FULL_QCOW_IMAGE)")" > SHA256SUMS
 	@echo "✅ Full standard prototype artifacts ready in $(FULL_OUTPUT_DIR)"
+
+utm-ios-bootstrap: image
+	@mkdir -p "$(UTM_IOS_DIR)"
+	qemu-img convert -f raw -O qcow2 "$(IMAGE)" "$(UTM_IOS_BOOTSTRAP_QCOW)"
+	cd "$(UTM_IOS_DIR)" && sha256sum "$$(basename "$(UTM_IOS_BOOTSTRAP_QCOW)")" > SHA256SUMS
+	qemu-img info "$(UTM_IOS_BOOTSTRAP_QCOW)"
+	@echo "✅ UTM/iOS minimum qcow2 image: $(UTM_IOS_BOOTSTRAP_QCOW)"
+
+utm-ios-smoke: utm-ios-bootstrap
+	@set -o pipefail; \
+	 timeout 90 qemu-system-aarch64 \
+		-bios /usr/share/qemu-efi-aarch64/QEMU_EFI.fd \
+		-M virt -cpu max -m 2048 \
+		-device qemu-xhci \
+		-device usb-storage,drive=x0 \
+		-drive file="$(UTM_IOS_BOOTSTRAP_QCOW)",if=none,format=qcow2,id=x0 \
+		-device ramfb -nographic -no-reboot >"$(UTM_IOS_BOOTSTRAP_LOG)" 2>&1 || test $$? -eq 124; \
+	 strings "$(UTM_IOS_BOOTSTRAP_LOG)" | grep -q 'Welcome to the Haiku boot loader'; \
+	 strings "$(UTM_IOS_BOOTSTRAP_LOG)" | grep -q 'volume at "/boot/system" registered'; \
+	 ! strings "$(UTM_IOS_BOOTSTRAP_LOG)" | grep -q 'PANIC:'
+	@echo "✅ UTM/iOS qcow2 smoke passed: $(UTM_IOS_BOOTSTRAP_LOG)"
 
 release-audit: bfs-fuse direct-package
 	@chmod +x $(CURDIR)/scripts/audit-release-package-closure.sh
