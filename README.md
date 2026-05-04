@@ -136,9 +136,10 @@ make utm-ios-smoke
 ```
 
 This writes `/workspace/tmp/haiku-build/utm-ios/haiku-arm64-minimum-utm-ios.qcow2`
-and smoke-tests it with QEMU `virt` using USB storage. In UTM for iOS, attach it
-as a **USB** disk rather than VirtIO; the current minimum image reaches the
-kernel via VirtIO but cannot rediscover the boot partition there.
+and smoke-tests it with QEMU `virt` using a VirtIO block disk. In UTM for iOS,
+attach it as a **VirtIO** disk. The minimum image includes `virtio_block` in
+`haiku.hpkg` so the kernel can rediscover and mount the boot partition after the
+UEFI loader hands off.
 
 For the full standard-image prototype, run:
 
