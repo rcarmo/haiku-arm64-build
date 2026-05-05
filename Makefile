@@ -42,6 +42,7 @@ DESKTOP_STORAGE := virtio
 FULL_STANDARD_STORAGE := virtio
 BFS_FUSE := /workspace/tmp/bfs_fuse
 BFS_FUSE_BUILT := $(BUILD_DIR)/objects/linux/arm64/release/tools/bfs_shell/bfs_fuse
+BFS_SHELL := $(BUILD_DIR)/objects/linux/arm64/release/tools/bfs_shell/bfs_shell
 ORANGEPI6PLUS_EFI_SNAPSHOT_DIR := /workspace/tmp/orangepi6plus-efi-snapshot/latest
 ORANGEPI6PLUS_EFI_ESP_DEV := /dev/nvme0n1p1
 
@@ -159,11 +160,12 @@ toolchain: jam
 	fi
 
 bfs-fuse: toolchain
-	cd $(BUILD_DIR) && $(HAIKU_REVISION_ENV) jam -j$(NPROC) -q '<build>bfs_fuse'
+	cd $(BUILD_DIR) && $(HAIKU_REVISION_ENV) jam -j$(NPROC) -q '<build>bfs_shell' '<build>bfs_fuse'
 	@mkdir -p "$$(dirname "$(BFS_FUSE)")"
 	ln -sf "$(BFS_FUSE_BUILT)" "$(BFS_FUSE)"
 	@test -x "$(BFS_FUSE)"
-	@echo "✅ BFS FUSE helper linked: $(BFS_FUSE) -> $(BFS_FUSE_BUILT)"
+	@test -x "$(BFS_SHELL)"
+	@echo "✅ BFS helpers ready: $(BFS_SHELL), $(BFS_FUSE) -> $(BFS_FUSE_BUILT)"
 
 direct-package: toolchain
 	cd $(BUILD_DIR) && $(HAIKU_REVISION_ENV) jam -j$(NPROC) -q haiku.hpkg
