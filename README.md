@@ -110,7 +110,8 @@ For later regression work, the repo now includes a small QEMU desktop harness.
 The new `full-*` targets are the preferred names for the authoritative full-QEMU
 lane; the older `desktop-*` names remain as compatibility aliases.
 
-The core validation image can also be emitted as both raw and qcow2 artifacts:
+The upstream-matching QEMU/UTM VirtIO base desktop image can also be emitted as
+both raw and qcow2 artifacts:
 
 ```sh
 make validation-artifacts HREV=59671 \
@@ -118,17 +119,21 @@ make validation-artifacts HREV=59671 \
   HAIKU_BRANCH=arm64-bootstrap-fixes
 ```
 
-This writes:
+This starts from the selected official Haiku ARM64 nightly MMC image, keeps the
+basic desktop/minimal package setup, overlays our rebuilt `haiku.hpkg` plus the
+small `zstd_runtime` compatibility package, and validates the result with VirtIO
+block storage. It writes:
 
 - `/workspace/tmp/haiku-build/validated/haiku-arm64-icu74-desktop.boot.img`
 - `/workspace/tmp/haiku-build/validated/haiku-arm64-icu74-desktop.qcow2`
+- `/workspace/tmp/haiku-build/validated/README-QEMU-VIRTIO-BASE.md`
 - `/workspace/tmp/haiku-build/validated/SHA256SUMS`
 
 GitHub Actions runs the image flow for pushed tags matching `hrev*` (for
 example `hrev59677`) or via manual `workflow_dispatch` on GitHub-hosted ARM64
 Linux runners. It uploads three downloadable workflow artifacts:
 
-- `haiku-arm64-validation-hrevNNNNN` — core raw/qcow2 validation image plus checksums
+- `haiku-arm64-qemu-virtio-base-hrevNNNNN` — upstream-matching minimal desktop raw/qcow2 base image, README, and checksums
 - `haiku-arm64-full-prototype-hrevNNNNN` — full prototype raw/qcow2 image plus checksums
 - `haiku-arm64-utm-ios-virtio-hrevNNNNN` — UTM/iOS VirtIO minimum qcow2, README, checksums, and smoke log
 

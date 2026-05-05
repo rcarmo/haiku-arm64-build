@@ -19,6 +19,8 @@ DESKTOP_RUN_IMAGE := $(DESKTOP_BUILD_IMAGE)
 DESKTOP_VALIDATE_IMAGE := $(DESKTOP_BUILD_IMAGE)
 VALIDATION_RAW_IMAGE := $(DESKTOP_BUILD_IMAGE)
 VALIDATION_QCOW_IMAGE := /workspace/tmp/haiku-build/validated/haiku-arm64-icu74-desktop.qcow2
+VALIDATION_README_SRC := $(CURDIR)/docs/README-QEMU-VIRTIO-BASE.md
+VALIDATION_README := /workspace/tmp/haiku-build/validated/README-QEMU-VIRTIO-BASE.md
 FULL_OUTPUT_DIR := /workspace/tmp/haiku-build/full
 FULL_BUILD_IMAGE := $(FULL_OUTPUT_DIR)/haiku-arm64-icu74-full.boot.img
 FULL_QCOW_IMAGE := $(FULL_OUTPUT_DIR)/haiku-arm64-icu74-full.qcow2
@@ -34,6 +36,8 @@ DESKTOP_STATE_FILE := $(DESKTOP_HARNESS_DIR)/$(DESKTOP_TMUX_SESSION).state
 DESKTOP_MONITOR_SOCKET := $(DESKTOP_HARNESS_DIR)/$(DESKTOP_TMUX_SESSION).monitor.sock
 DESKTOP_SCREENSHOT := $(DESKTOP_HARNESS_DIR)/$(DESKTOP_TMUX_SESSION).ppm
 DESKTOP_VALIDATE_TIMEOUT_SECS := 900
+DESKTOP_STORAGE := virtio
+FULL_STANDARD_STORAGE := virtio
 BFS_FUSE := /workspace/tmp/bfs_fuse
 BFS_FUSE_BUILT := $(BUILD_DIR)/objects/linux/arm64/release/tools/bfs_shell/bfs_fuse
 ORANGEPI6PLUS_EFI_SNAPSHOT_DIR := /workspace/tmp/orangepi6plus-efi-snapshot/latest
@@ -242,6 +246,7 @@ desktop-run: desktop-stop
 	@mkdir -p $(DESKTOP_HARNESS_DIR)
 	@chmod +x $(CURDIR)/scripts/qemu-desktop-harness.sh
 	$(CURDIR)/scripts/qemu-desktop-harness.sh run \
+		--storage "$(DESKTOP_STORAGE)" \
 		--image "$(DESKTOP_RUN_IMAGE)" \
 		--tmux-session "$(DESKTOP_TMUX_SESSION)" \
 		--state-file "$(DESKTOP_STATE_FILE)" \
@@ -275,6 +280,7 @@ desktop-capture: desktop-stop
 	@mkdir -p $(DESKTOP_HARNESS_DIR)
 	@chmod +x $(CURDIR)/scripts/qemu-desktop-harness.sh
 	$(CURDIR)/scripts/qemu-desktop-harness.sh capture \
+		--storage "$(DESKTOP_STORAGE)" \
 		--image "$(DESKTOP_RUN_IMAGE)" \
 		--tmux-session "$(DESKTOP_TMUX_SESSION)" \
 		--state-file "$(DESKTOP_STATE_FILE)" \
@@ -291,7 +297,7 @@ desktop-screenshot:
 
 desktop-validate: bfs-fuse
 	@chmod +x $(CURDIR)/scripts/qemu-desktop-harness.sh
-	$(CURDIR)/scripts/qemu-desktop-harness.sh validate --timeout "$(DESKTOP_VALIDATE_TIMEOUT_SECS)" --image "$(DESKTOP_VALIDATE_IMAGE)"
+	$(CURDIR)/scripts/qemu-desktop-harness.sh validate --storage "$(DESKTOP_STORAGE)" --timeout "$(DESKTOP_VALIDATE_TIMEOUT_SECS)" --image "$(DESKTOP_VALIDATE_IMAGE)"
 
 validation-image: desktop-image
 	@echo "✅ Core validation raw image: $(VALIDATION_RAW_IMAGE)"
@@ -299,6 +305,7 @@ validation-image: desktop-image
 validation-qcow: validation-image
 	@mkdir -p "$$(dirname "$(VALIDATION_QCOW_IMAGE)")"
 	qemu-img convert -f raw -O qcow2 "$(VALIDATION_RAW_IMAGE)" "$(VALIDATION_QCOW_IMAGE)"
+	cp "$(VALIDATION_README_SRC)" "$(VALIDATION_README)"
 	qemu-img info "$(VALIDATION_QCOW_IMAGE)"
 	@echo "✅ Core validation qcow2 image: $(VALIDATION_QCOW_IMAGE)"
 
@@ -313,7 +320,7 @@ full-standard-image: bfs-fuse direct-package
 
 full-standard-validate: bfs-fuse
 	@chmod +x $(CURDIR)/scripts/qemu-desktop-harness.sh
-	$(CURDIR)/scripts/qemu-desktop-harness.sh validate --timeout "$(FULL_VALIDATE_TIMEOUT_SECS)" --image "$(FULL_BUILD_IMAGE)"
+	$(CURDIR)/scripts/qemu-desktop-harness.sh validate --storage "$(FULL_STANDARD_STORAGE)" --timeout "$(FULL_VALIDATE_TIMEOUT_SECS)" --image "$(FULL_BUILD_IMAGE)"
 
 full-standard-qcow: full-standard-image
 	@mkdir -p "$$(dirname "$(FULL_QCOW_IMAGE)")"

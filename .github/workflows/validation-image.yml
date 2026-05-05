@@ -85,10 +85,11 @@ jobs:
             echo "Revision: \`${{ steps.hrev.outputs.hrev_tag }}\`"
             echo "Runner: ARM64 Linux (\`ubuntu-24.04-arm\`)"
             echo
-            echo "### Core validation image"
+            echo "### QEMU/UTM VirtIO base desktop image"
             echo
             ls -lh "$VALIDATION_DIR"/haiku-arm64-icu74-desktop.boot.img \
                    "$VALIDATION_DIR"/haiku-arm64-icu74-desktop.qcow2 \
+                   "$VALIDATION_DIR"/README-QEMU-VIRTIO-BASE.md \
                    "$VALIDATION_DIR"/SHA256SUMS
             echo
             echo '```'
@@ -130,16 +131,17 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload core validation image artifacts
+      - name: Upload QEMU/UTM VirtIO base desktop image artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: haiku-arm64-validation-${{ steps.hrev.outputs.hrev_tag }}
+          name: haiku-arm64-qemu-virtio-base-${{ steps.hrev.outputs.hrev_tag }}
           if-no-files-found: error
           retention-days: 14
           compression-level: 0
           path: |
             /workspace/tmp/haiku-build/validated/haiku-arm64-icu74-desktop.boot.img
             /workspace/tmp/haiku-build/validated/haiku-arm64-icu74-desktop.qcow2
+            /workspace/tmp/haiku-build/validated/README-QEMU-VIRTIO-BASE.md
             /workspace/tmp/haiku-build/validated/SHA256SUMS
 
       - name: Upload full standard prototype image artifacts

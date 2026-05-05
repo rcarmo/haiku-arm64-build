@@ -10,6 +10,7 @@ QEMU_EFI=${QEMU_EFI:-/usr/share/qemu-efi-aarch64/QEMU_EFI.fd}
 OUTPUT_DIR=${OUTPUT_DIR:-/workspace/tmp/haiku-boot-harness}
 TIMEOUT_SECS=${TIMEOUT_SECS:-300}
 MEMORY_MB=${MEMORY_MB:-2048}
+STORAGE=${STORAGE:-usb}
 MODE=${MODE:-validate}
 KEEP_COPY=${KEEP_COPY:-0}
 IMAGE=${IMAGE:-}
@@ -47,6 +48,7 @@ Options:
   --image PATH            Image to boot.
   --timeout SECONDS       Overall wait timeout (default: 300).
   --memory MB             Guest RAM in MiB (default: 2048).
+  --storage usb|virtio    Boot disk transport (default: usb).
   --output-dir PATH       Output directory for working copies/logs/state.
   --keep-copy             Keep the writable image copy after validate.
   --tmux-session NAME     tmux session name for run/capture mode.
@@ -109,6 +111,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --memory)
       MEMORY_MB=$2
+      shift 2
+      ;;
+    --storage)
+      STORAGE=$2
       shift 2
       ;;
     --output-dir)
@@ -249,6 +255,7 @@ echo "work image:   $WORK_IMAGE"
 echo "log:          $LOG_FILE"
 echo "serial log:   $SERIAL_LOG"
 echo "memory:       ${MEMORY_MB} MiB"
+echo "storage:      ${STORAGE}"
 echo "timeout:      ${TIMEOUT_SECS}s"
 [[ "$MODE" == "run" || "$MODE" == "capture" ]] && echo "tmux session: $TMUX_SESSION"
 
@@ -257,9 +264,26 @@ QEMU_COMMON=(
   -M virt
   -cpu max
   -m "$MEMORY_MB"
-  -device qemu-xhci
-  -device usb-storage,drive=x0
-  -drive "file=$WORK_IMAGE,if=none,format=raw,id=x0"
+)
+case "$STORAGE" in
+  usb)
+    QEMU_COMMON+=(
+      -device qemu-xhci
+      -device usb-storage,drive=x0
+      -drive "file=$WORK_IMAGE,if=none,format=raw,id=x0"
+    )
+    ;;
+  virtio)
+    QEMU_COMMON+=(
+      -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
+      -drive "file=$WORK_IMAGE,if=none,format=raw,id=x0"
+    )
+    ;;
+  *)
+    die "unsupported storage transport: $STORAGE"
+    ;;
+esac
+QEMU_COMMON+=(
   -device ramfb
   -no-reboot
 )
@@ -367,6 +391,7 @@ LOG_FILE=$LOG_FILE
 SERIAL_LOG=$SERIAL_LOG
 MONITOR_SOCKET=$MONITOR_SOCKET
 SCREENSHOT_OUT=$SCREENSHOT_OUT
+STORAGE=$STORAGE
 IMAGE=$IMAGE
 EOF
 }
