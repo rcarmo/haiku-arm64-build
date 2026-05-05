@@ -117,6 +117,11 @@ if [[ "$IMAGE_FLAVOR" == "full" ]]; then
   require_file "$EXPAT_HPKG"
 fi
 
+INCLUDE_ZSTD_RUNTIME=0
+if grep -q 'lib:libzstd' "$DIRECT_HAIKU_PACKAGE_INFO"; then
+  INCLUDE_ZSTD_RUNTIME=1
+fi
+
 EFFECTIVE_BASH_HPKG="$BASH_HPKG"
 
 sanitize_bash_package_if_needed() {
@@ -442,7 +447,9 @@ PY
     rm -f "$pkgdir/bash_bootstrap-4.4.023-1-arm64.hpkg" \
           "$pkgdir/coreutils_bootstrap-9.9-1-arm64.hpkg"
     cp "$OUTPUT_HAIKU_HPKG" "$pkgdir/$(basename "$OUTPUT_HAIKU_HPKG")"
-    cp "$ZSTD_HPKG" "$pkgdir/"
+    if (( INCLUDE_ZSTD_RUNTIME )); then
+      cp "$ZSTD_HPKG" "$pkgdir/"
+    fi
     if [[ "$IMAGE_FLAVOR" == "full" ]]; then
       cp "$EXPAT_HPKG" "$pkgdir/"
       cp "$OUTPUT_RELEASE_SHIM_HPKG" "$pkgdir/"
@@ -481,11 +488,15 @@ PY
     seek=$SYSTEM_PARTITION_START conv=notrunc status=none
 }
 
-echo "== building zstd runtime package =="
-if [[ "$ZSTD_HPKG" == "$DEFAULT_OUTPUT_ZSTD_HPKG" ]]; then
-  create_zstd_runtime_package
+if (( INCLUDE_ZSTD_RUNTIME )); then
+  echo "== building zstd runtime package =="
+  if [[ "$ZSTD_HPKG" == "$DEFAULT_OUTPUT_ZSTD_HPKG" ]]; then
+    create_zstd_runtime_package
+  else
+    echo "== using provided zstd package: $ZSTD_HPKG =="
+  fi
 else
-  echo "== using provided zstd package: $ZSTD_HPKG =="
+  echo "== direct haiku package does not require libzstd; skipping zstd runtime package =="
 fi
 
 if [[ "$IMAGE_FLAVOR" == "full" ]]; then
@@ -501,9 +512,12 @@ assemble_image
 
 echo
 if [[ "$IMAGE_FLAVOR" == "full" ]]; then
-  ls -lh "$ZSTD_HPKG" "$OUTPUT_RELEASE_SHIM_HPKG" "$OUTPUT_HAIKU_HPKG" "$OUTPUT_IMAGE"
+  ls -lh "$OUTPUT_RELEASE_SHIM_HPKG" "$OUTPUT_HAIKU_HPKG" "$OUTPUT_IMAGE"
 else
-  ls -lh "$ZSTD_HPKG" "$OUTPUT_HAIKU_HPKG" "$OUTPUT_IMAGE"
+  ls -lh "$OUTPUT_HAIKU_HPKG" "$OUTPUT_IMAGE"
+fi
+if (( INCLUDE_ZSTD_RUNTIME )) && [[ -f "$ZSTD_HPKG" ]]; then
+  ls -lh "$ZSTD_HPKG"
 fi
 if [[ -f "$OUTPUT_COMPAT_HPKG" ]]; then
   ls -lh "$OUTPUT_COMPAT_HPKG"
