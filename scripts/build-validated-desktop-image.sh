@@ -154,8 +154,6 @@ PY
   "$PACKAGE_TOOL" create -0 -C "$stage_dir" -i "$package_info" "$EFFECTIVE_BASH_HPKG" >/dev/null
 }
 
-sanitize_bash_package_if_needed
-
 create_zstd_runtime_package() {
   local inspect_dir="$WORK_DIR/zstd-runtime-inspect"
   local stage_dir="$WORK_DIR/zstd-runtime-stage"
