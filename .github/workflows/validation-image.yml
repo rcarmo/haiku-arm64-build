@@ -52,8 +52,8 @@ jobs:
           echo "cache_key=haiku-arm64-generated-${RUNNER_OS}-${RUNNER_ARCH}-hrev${hrev}-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
           echo "Building Haiku ARM64 images for hrev$hrev"
 
-  qemu-virtio-base:
-    name: QEMU/UTM VirtIO base (${{ needs.derive.outputs.hrev_tag }})
+  qemu-virtio-base-build:
+    name: Build QEMU/UTM VirtIO base raw (${{ needs.derive.outputs.hrev_tag }})
     needs: derive
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
@@ -97,12 +97,94 @@ jobs:
             haiku-arm64-generated-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Build upstream-matching base raw image
-        timeout-minutes: 20
+        timeout-minutes: 25
         run: |
-          make full-sync desktop-image \
+          make full-sync image desktop-image \
             HREV="${{ needs.derive.outputs.hrev }}" \
             HAIKU_REMOTE="$HAIKU_REMOTE" \
             HAIKU_BRANCH="$HAIKU_BRANCH"
+
+      - name: Save build and nightly cache
+        if: steps.build-cache.outputs.cache-hit != 'true'
+        timeout-minutes: 8
+        uses: actions/cache/save@v5
+        with:
+          path: |
+            haiku/generated.arm64
+            /workspace/tmp/haiku-nightly-arm64
+          key: ${{ needs.derive.outputs.cache_key }}
+
+      - name: Upload base raw handoff artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: haiku-arm64-qemu-virtio-base-raw-${{ needs.derive.outputs.hrev_tag }}
+          if-no-files-found: error
+          retention-days: 2
+          compression-level: 0
+          path: |
+            /workspace/tmp/haiku-build/validated/haiku-arm64-icu74-desktop.boot.img
+            /workspace/tmp/haiku-build/validated/README-QEMU-VIRTIO-BASE.md
+
+      - name: Upload base build logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: haiku-arm64-qemu-virtio-base-build-logs-${{ needs.derive.outputs.hrev_tag }}
+          if-no-files-found: ignore
+          retention-days: 14
+          path: |
+            /workspace/tmp/haiku-build/validated/work-*/*.log
+
+  qemu-virtio-base-validate:
+    name: Validate/package QEMU/UTM VirtIO base (${{ needs.derive.outputs.hrev_tag }})
+    needs:
+      - derive
+      - qemu-virtio-base-build
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - name: Check out automation repo
+        timeout-minutes: 3
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Prepare workspace paths
+        timeout-minutes: 3
+        run: |
+          sudo mkdir -p /workspace/tmp
+          sudo chown -R "$USER:$USER" /workspace
+          sudo modprobe fuse || true
+          if [ -e /dev/fuse ]; then sudo chmod 666 /dev/fuse; fi
+
+      - name: Install dependencies
+        timeout-minutes: 10
+        run: make deps
+
+      - name: Clone Haiku/buildtools sources
+        timeout-minutes: 8
+        run: |
+          make clone \
+            HAIKU_REMOTE="$HAIKU_REMOTE" \
+            HAIKU_BRANCH="$HAIKU_BRANCH"
+
+      - name: Restore build and nightly cache
+        timeout-minutes: 8
+        uses: actions/cache/restore@v5
+        with:
+          path: |
+            haiku/generated.arm64
+            /workspace/tmp/haiku-nightly-arm64
+          key: ${{ needs.derive.outputs.cache_key }}
+          restore-keys: |
+            haiku-arm64-generated-${{ runner.os }}-${{ runner.arch }}-${{ needs.derive.outputs.hrev_tag }}-
+            haiku-arm64-generated-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Download base raw handoff artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: haiku-arm64-qemu-virtio-base-raw-${{ needs.derive.outputs.hrev_tag }}
+          path: /workspace/tmp/haiku-build/validated
 
       - name: Validate base image with VirtIO block
         timeout-minutes: 20
@@ -118,16 +200,6 @@ jobs:
           cp docs/README-QEMU-VIRTIO-BASE.md "$VALIDATION_DIR/README-QEMU-VIRTIO-BASE.md"
           cd "$VALIDATION_DIR"
           sha256sum haiku-arm64-icu74-desktop.boot.img haiku-arm64-icu74-desktop.qcow2 > SHA256SUMS
-
-      - name: Save build and nightly cache
-        if: steps.build-cache.outputs.cache-hit != 'true'
-        timeout-minutes: 8
-        uses: actions/cache/save@v5
-        with:
-          path: |
-            haiku/generated.arm64
-            /workspace/tmp/haiku-nightly-arm64
-          key: ${{ needs.derive.outputs.cache_key }}
 
       - name: Summarize base image
         if: always()
@@ -184,7 +256,7 @@ jobs:
     name: UTM/iOS VirtIO minimum (${{ needs.derive.outputs.hrev_tag }})
     needs:
       - derive
-      - qemu-virtio-base
+      - qemu-virtio-base-build
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
     steps:
@@ -284,7 +356,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && inputs.build_full_prototype
     needs:
       - derive
-      - qemu-virtio-base
+      - qemu-virtio-base-build
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
     steps:
