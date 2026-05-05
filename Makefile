@@ -26,6 +26,8 @@ FULL_VALIDATE_TIMEOUT_SECS := 900
 UTM_IOS_DIR := /workspace/tmp/haiku-build/utm-ios
 UTM_IOS_BOOTSTRAP_QCOW := $(UTM_IOS_DIR)/haiku-arm64-minimum-utm-ios.qcow2
 UTM_IOS_BOOTSTRAP_LOG := $(UTM_IOS_DIR)/qemu-minimum-qcow-virtio-smoke.log
+UTM_IOS_README_SRC := $(CURDIR)/docs/README-UTM-iOS.md
+UTM_IOS_README := $(UTM_IOS_DIR)/README-UTM-iOS.md
 DESKTOP_HARNESS_DIR := /workspace/tmp/haiku-boot-harness
 DESKTOP_TMUX_SESSION := haiku-desktop
 DESKTOP_STATE_FILE := $(DESKTOP_HARNESS_DIR)/$(DESKTOP_TMUX_SESSION).state
@@ -326,6 +328,7 @@ full-standard-artifacts: full-sync full-standard-image full-standard-validate fu
 utm-ios-bootstrap: image
 	@mkdir -p "$(UTM_IOS_DIR)"
 	qemu-img convert -f raw -O qcow2 "$(IMAGE)" "$(UTM_IOS_BOOTSTRAP_QCOW)"
+	cp "$(UTM_IOS_README_SRC)" "$(UTM_IOS_README)"
 	cd "$(UTM_IOS_DIR)" && sha256sum "$$(basename "$(UTM_IOS_BOOTSTRAP_QCOW)")" > SHA256SUMS
 	qemu-img info "$(UTM_IOS_BOOTSTRAP_QCOW)"
 	@echo "✅ UTM/iOS minimum qcow2 image: $(UTM_IOS_BOOTSTRAP_QCOW)"

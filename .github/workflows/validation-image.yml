@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'hrev*'
+  workflow_dispatch:
+    inputs:
+      hrev:
+        description: 'Haiku revision to build (for example hrev59677 or 59677)'
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -30,16 +36,21 @@ jobs:
       - name: Install dependencies
         run: make deps
 
-      - name: Derive Haiku revision from tag
+      - name: Derive Haiku revision
         id: hrev
         run: |
-          tag="${GITHUB_REF_NAME}"
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            tag="${{ inputs.hrev }}"
+          else
+            tag="${GITHUB_REF_NAME}"
+          fi
           hrev="${tag#hrev}"
           if ! printf '%s' "$hrev" | grep -Eq '^[0-9]+$'; then
-            echo "Tag must be hrevNNNNN, got: $tag" >&2
+            echo "Revision must be hrevNNNNN or NNNNN, got: $tag" >&2
             exit 1
           fi
           echo "hrev=$hrev" >> "$GITHUB_OUTPUT"
+          echo "hrev_tag=hrev$hrev" >> "$GITHUB_OUTPUT"
           echo "Building Haiku ARM64 images for hrev$hrev"
 
       - name: Build and validate core raw + qcow2 images
@@ -56,15 +67,22 @@ jobs:
             HAIKU_REMOTE=https://github.com/rcarmo/haiku.git \
             HAIKU_BRANCH=arm64-bootstrap-fixes
 
+      - name: Build and validate UTM/iOS VirtIO minimum qcow2 image
+        run: |
+          make utm-ios-smoke \
+            HAIKU_REMOTE=https://github.com/rcarmo/haiku.git \
+            HAIKU_BRANCH=arm64-bootstrap-fixes
+
       - name: Summarize artifacts
         run: |
           VALIDATION_DIR=/workspace/tmp/haiku-build/validated
           FULL_DIR=/workspace/tmp/haiku-build/full
+          UTM_IOS_DIR=/workspace/tmp/haiku-build/utm-ios
           {
             echo "## Haiku ARM64 images"
             echo
-            echo "Tag: \`${GITHUB_REF_NAME}\`"
-            echo "Revision: \`hrev${{ steps.hrev.outputs.hrev }}\`"
+            echo "Tag/ref: \`${GITHUB_REF_NAME}\`"
+            echo "Revision: \`${{ steps.hrev.outputs.hrev_tag }}\`"
             echo "Runner: ARM64 Linux (\`ubuntu-24.04-arm\`)"
             echo
             echo "### Core validation image"
@@ -89,19 +107,33 @@ jobs:
             qemu-img info "$FULL_DIR/haiku-arm64-icu74-full.qcow2"
             echo '```'
             echo
+            echo "### UTM/iOS VirtIO minimum image"
+            echo
+            echo "This image is built from the local @minimum-mmc target and is smoke-tested with QEMU VirtIO block storage."
+            echo
+            ls -lh "$UTM_IOS_DIR"/haiku-arm64-minimum-utm-ios.qcow2 \
+                   "$UTM_IOS_DIR"/README-UTM-iOS.md \
+                   "$UTM_IOS_DIR"/SHA256SUMS
+            echo
+            echo '```'
+            qemu-img info "$UTM_IOS_DIR/haiku-arm64-minimum-utm-ios.qcow2"
+            echo '```'
+            echo
             echo "### SHA256"
             echo
             echo '```'
             cat "$VALIDATION_DIR/SHA256SUMS"
             echo
             cat "$FULL_DIR/SHA256SUMS"
+            echo
+            cat "$UTM_IOS_DIR/SHA256SUMS"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload core validation image artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: haiku-arm64-validation-${{ github.ref_name }}
+          name: haiku-arm64-validation-${{ steps.hrev.outputs.hrev_tag }}
           if-no-files-found: error
           retention-days: 14
           compression-level: 0
@@ -113,7 +145,7 @@ jobs:
       - name: Upload full standard prototype image artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: haiku-arm64-full-prototype-${{ github.ref_name }}
+          name: haiku-arm64-full-prototype-${{ steps.hrev.outputs.hrev_tag }}
           if-no-files-found: error
           retention-days: 14
           compression-level: 0
@@ -122,11 +154,24 @@ jobs:
             /workspace/tmp/haiku-build/full/haiku-arm64-icu74-full.qcow2
             /workspace/tmp/haiku-build/full/SHA256SUMS
 
+      - name: Upload UTM/iOS VirtIO minimum image artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: haiku-arm64-utm-ios-virtio-${{ steps.hrev.outputs.hrev_tag }}
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+          path: |
+            /workspace/tmp/haiku-build/utm-ios/haiku-arm64-minimum-utm-ios.qcow2
+            /workspace/tmp/haiku-build/utm-ios/README-UTM-iOS.md
+            /workspace/tmp/haiku-build/utm-ios/SHA256SUMS
+            /workspace/tmp/haiku-build/utm-ios/qemu-minimum-qcow-virtio-smoke.log
+
       - name: Upload validation logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: haiku-arm64-image-logs-${{ github.ref_name }}
+          name: haiku-arm64-image-logs-${{ steps.hrev.outputs.hrev_tag }}
           if-no-files-found: ignore
           retention-days: 14
           path: |
@@ -134,3 +179,4 @@ jobs:
             /workspace/tmp/haiku-boot-harness/*.serial.log
             /workspace/tmp/haiku-build/validated/work-*/*.log
             /workspace/tmp/haiku-build/full/work-*/*.log
+            /workspace/tmp/haiku-build/utm-ios/*.log

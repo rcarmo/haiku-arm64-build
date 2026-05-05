@@ -124,10 +124,13 @@ This writes:
 - `/workspace/tmp/haiku-build/validated/haiku-arm64-icu74-desktop.qcow2`
 - `/workspace/tmp/haiku-build/validated/SHA256SUMS`
 
-GitHub Actions runs the validation-image flow only for pushed tags matching
-`hrev*` (for example `hrev59671`) on GitHub-hosted ARM64 Linux runners and
-uploads the raw image, qcow2 image, and checksums as downloadable workflow
-artifacts.
+GitHub Actions runs the image flow for pushed tags matching `hrev*` (for
+example `hrev59677`) or via manual `workflow_dispatch` on GitHub-hosted ARM64
+Linux runners. It uploads three downloadable workflow artifacts:
+
+- `haiku-arm64-validation-hrevNNNNN` — core raw/qcow2 validation image plus checksums
+- `haiku-arm64-full-prototype-hrevNNNNN` — full prototype raw/qcow2 image plus checksums
+- `haiku-arm64-utm-ios-virtio-hrevNNNNN` — UTM/iOS VirtIO minimum qcow2, README, checksums, and smoke log
 
 For a UTM/iOS-friendly minimum bootstrap-style qcow2, run:
 

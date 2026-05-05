@@ -125,6 +125,9 @@ As of 2026-04-30:
   and smoke-tests it with QEMU `virt` using VirtIO block storage; for UTM/iOS
   attach the qcow2 as a VirtIO disk. The minimum image includes `virtio_block`
   so the kernel can rediscover and mount the boot partition after loader handoff
+- GitHub Actions (`.github/workflows/validation-image.yml`) uploads the same
+  UTM/iOS VirtIO image as `haiku-arm64-utm-ios-virtio-hrevNNNNN` for `hrev*`
+  tags or manual workflow dispatch runs
 - stock ARM64 nightly validates in QEMU
 - the direct-package desktop lane validates in QEMU
 - the local arm64 `HAIKU_NO_DOWNLOADS=1` `@minimum-mmc` path builds and passes
