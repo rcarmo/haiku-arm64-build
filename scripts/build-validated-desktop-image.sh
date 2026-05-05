@@ -110,9 +110,7 @@ case "$IMAGE_FLAVOR" in
   *) echo "unsupported IMAGE_FLAVOR: $IMAGE_FLAVOR" >&2; exit 1 ;;
 esac
 
-if [[ "$ZSTD_HPKG" == "$DEFAULT_OUTPUT_ZSTD_HPKG" ]]; then
-  require_file "$ZSTD_SOURCE_HPKG"
-else
+if [[ "$ZSTD_HPKG" != "$DEFAULT_OUTPUT_ZSTD_HPKG" ]]; then
   require_file "$ZSTD_HPKG"
 fi
 if [[ "$IMAGE_FLAVOR" == "full" ]]; then
@@ -163,13 +161,21 @@ create_zstd_runtime_package() {
   local stage_dir="$WORK_DIR/zstd-runtime-stage"
   local package_info="$WORK_DIR/zstd-runtime.PackageInfo"
   local source_version source_version_base
+  local zstd_build_package_dir="$GEN_PACKAGES/zstd_bootstrap-1.5.6-1-arm64"
 
   rm -rf "$inspect_dir" "$stage_dir"
   mkdir -p "$inspect_dir" "$stage_dir/lib"
-  "$PACKAGE_TOOL" extract -C "$inspect_dir" "$ZSTD_SOURCE_HPKG" >/dev/null
+  if [[ -f "$ZSTD_SOURCE_HPKG" ]]; then
+    "$PACKAGE_TOOL" extract -C "$inspect_dir" "$ZSTD_SOURCE_HPKG" >/dev/null
+  elif [[ -d "$zstd_build_package_dir" ]]; then
+    cp -a "$zstd_build_package_dir/." "$inspect_dir/"
+  else
+    echo "missing zstd source package or build package dir: $ZSTD_SOURCE_HPKG, $zstd_build_package_dir" >&2
+    exit 1
+  fi
 
   compgen -G "$inspect_dir/lib/libzstd.so*" >/dev/null \
-    || { echo "missing libzstd payload in $ZSTD_SOURCE_HPKG" >&2; exit 1; }
+    || { echo "missing libzstd payload in $ZSTD_SOURCE_HPKG or $zstd_build_package_dir" >&2; exit 1; }
   cp -a "$inspect_dir"/lib/libzstd.so* "$stage_dir/lib/"
 
   source_version=$(awk '$1 == "version" { print $2; exit }' "$inspect_dir/.PackageInfo")
