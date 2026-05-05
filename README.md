@@ -131,11 +131,22 @@ block storage. It writes:
 
 GitHub Actions runs the image flow for pushed tags matching `hrev*` (for
 example `hrev59677`) or via manual `workflow_dispatch` on GitHub-hosted ARM64
-Linux runners. It uploads three downloadable workflow artifacts:
+Linux runners. The workflow is split into 30-minute-capped jobs/stages: revision
+derivation, QEMU/UTM VirtIO base build/validation/qcow2 upload, UTM/iOS VirtIO
+minimum build/smoke/upload, and an optional manual full-prototype job. The
+previous missing-Haiku-tags CI failure is avoided by passing `HAIKU_REVISION`
+from the selected `hrev` into Jam.
 
-- `haiku-arm64-qemu-virtio-base-hrevNNNNN` — upstream-matching minimal desktop raw/qcow2 base image, README, and checksums
-- `haiku-arm64-full-prototype-hrevNNNNN` — full prototype raw/qcow2 image plus checksums
+Default uploads:
+
+- `haiku-arm64-qemu-virtio-base-hrevNNNNN` — upstream-matching minimal desktop raw/qcow2 base image, README, checksums
+- `haiku-arm64-qemu-virtio-base-logs-hrevNNNNN` — base validation logs
 - `haiku-arm64-utm-ios-virtio-hrevNNNNN` — UTM/iOS VirtIO minimum qcow2, README, checksums, and smoke log
+- `haiku-arm64-utm-ios-virtio-logs-hrevNNNNN` — UTM/iOS smoke logs
+
+Manual `workflow_dispatch` can also enable `build_full_prototype` to upload:
+
+- `haiku-arm64-full-prototype-hrevNNNNN` — optional full prototype raw/qcow2 image plus checksums
 
 For a UTM/iOS-friendly minimum bootstrap-style qcow2, run:
 

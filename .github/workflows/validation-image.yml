@@ -10,34 +10,32 @@ on:
         description: 'Haiku revision to build (for example hrev59677 or 59677)'
         required: true
         type: string
+      build_full_prototype:
+        description: 'Also build the full standard prototype image (optional; still capped at 30m)'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
 
+env:
+  HAIKU_REMOTE: https://github.com/rcarmo/haiku.git
+  HAIKU_BRANCH: arm64-bootstrap-fixes
+
 jobs:
-  haiku-images:
-    name: Haiku ARM64 images (${{ github.ref_name }})
-    # The Haiku ARM64 bootstrap/toolchain flow is host-architecture sensitive.
-    # Use GitHub-hosted ARM64 Linux runners, not x86_64 runners with emulation.
+  derive:
+    name: Derive hrev
     runs-on: ubuntu-24.04-arm
-    timeout-minutes: 360
-
+    timeout-minutes: 5
+    outputs:
+      hrev: ${{ steps.hrev.outputs.hrev }}
+      hrev_tag: ${{ steps.hrev.outputs.hrev_tag }}
+      cache_key: ${{ steps.hrev.outputs.cache_key }}
     steps:
-      - name: Check out automation repo
-        uses: actions/checkout@v4
-
-      - name: Prepare workspace paths
-        run: |
-          sudo mkdir -p /workspace/tmp
-          sudo chown -R "$USER:$USER" /workspace
-          sudo modprobe fuse || true
-          if [ -e /dev/fuse ]; then sudo chmod 666 /dev/fuse; fi
-
-      - name: Install dependencies
-        run: make deps
-
       - name: Derive Haiku revision
         id: hrev
+        timeout-minutes: 2
         run: |
           if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
             tag="${{ inputs.hrev }}"
@@ -51,90 +49,116 @@ jobs:
           fi
           echo "hrev=$hrev" >> "$GITHUB_OUTPUT"
           echo "hrev_tag=hrev$hrev" >> "$GITHUB_OUTPUT"
+          echo "cache_key=haiku-arm64-generated-${RUNNER_OS}-${RUNNER_ARCH}-hrev${hrev}-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
           echo "Building Haiku ARM64 images for hrev$hrev"
 
-      - name: Build and validate core raw + qcow2 images
-        run: |
-          make validation-artifacts \
-            HREV="${{ steps.hrev.outputs.hrev }}" \
-            HAIKU_REMOTE=https://github.com/rcarmo/haiku.git \
-            HAIKU_BRANCH=arm64-bootstrap-fixes
+  qemu-virtio-base:
+    name: QEMU/UTM VirtIO base (${{ needs.derive.outputs.hrev_tag }})
+    needs: derive
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - name: Check out automation repo
+        timeout-minutes: 3
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Build and validate full standard prototype raw + qcow2 images
+      - name: Prepare workspace paths
+        timeout-minutes: 3
         run: |
-          make full-standard-artifacts \
-            HREV="${{ steps.hrev.outputs.hrev }}" \
-            HAIKU_REMOTE=https://github.com/rcarmo/haiku.git \
-            HAIKU_BRANCH=arm64-bootstrap-fixes
+          sudo mkdir -p /workspace/tmp
+          sudo chown -R "$USER:$USER" /workspace
+          sudo modprobe fuse || true
+          if [ -e /dev/fuse ]; then sudo chmod 666 /dev/fuse; fi
 
-      - name: Build and validate UTM/iOS VirtIO minimum qcow2 image
+      - name: Install dependencies
+        timeout-minutes: 10
+        run: make deps
+
+      - name: Clone Haiku/buildtools sources
+        timeout-minutes: 8
         run: |
-          make utm-ios-smoke \
-            HAIKU_REMOTE=https://github.com/rcarmo/haiku.git \
-            HAIKU_BRANCH=arm64-bootstrap-fixes
+          make clone \
+            HAIKU_REMOTE="$HAIKU_REMOTE" \
+            HAIKU_BRANCH="$HAIKU_BRANCH"
 
-      - name: Summarize artifacts
+      - name: Restore build and nightly cache
+        id: build-cache
+        timeout-minutes: 5
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            haiku/generated.arm64
+            /workspace/tmp/haiku-nightly-arm64
+          key: ${{ needs.derive.outputs.cache_key }}
+          restore-keys: |
+            haiku-arm64-generated-${{ runner.os }}-${{ runner.arch }}-${{ needs.derive.outputs.hrev_tag }}-
+            haiku-arm64-generated-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Build upstream-matching base raw image
+        timeout-minutes: 20
+        run: |
+          make full-sync desktop-image \
+            HREV="${{ needs.derive.outputs.hrev }}" \
+            HAIKU_REMOTE="$HAIKU_REMOTE" \
+            HAIKU_BRANCH="$HAIKU_BRANCH"
+
+      - name: Validate base image with VirtIO block
+        timeout-minutes: 20
+        run: make desktop-validate HREV="${{ needs.derive.outputs.hrev }}"
+
+      - name: Convert base image to qcow2 and checksum
+        timeout-minutes: 8
         run: |
           VALIDATION_DIR=/workspace/tmp/haiku-build/validated
-          FULL_DIR=/workspace/tmp/haiku-build/full
-          UTM_IOS_DIR=/workspace/tmp/haiku-build/utm-ios
+          qemu-img convert -f raw -O qcow2 \
+            "$VALIDATION_DIR/haiku-arm64-icu74-desktop.boot.img" \
+            "$VALIDATION_DIR/haiku-arm64-icu74-desktop.qcow2"
+          cp docs/README-QEMU-VIRTIO-BASE.md "$VALIDATION_DIR/README-QEMU-VIRTIO-BASE.md"
+          cd "$VALIDATION_DIR"
+          sha256sum haiku-arm64-icu74-desktop.boot.img haiku-arm64-icu74-desktop.qcow2 > SHA256SUMS
+
+      - name: Save build and nightly cache
+        if: steps.build-cache.outputs.cache-hit != 'true'
+        timeout-minutes: 8
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            haiku/generated.arm64
+            /workspace/tmp/haiku-nightly-arm64
+          key: ${{ needs.derive.outputs.cache_key }}
+
+      - name: Summarize base image
+        if: always()
+        timeout-minutes: 3
+        run: |
+          VALIDATION_DIR=/workspace/tmp/haiku-build/validated
           {
-            echo "## Haiku ARM64 images"
+            echo "## QEMU/UTM VirtIO base desktop image"
             echo
-            echo "Tag/ref: \`${GITHUB_REF_NAME}\`"
-            echo "Revision: \`${{ steps.hrev.outputs.hrev_tag }}\`"
+            echo "Revision: \`${{ needs.derive.outputs.hrev_tag }}\`"
             echo "Runner: ARM64 Linux (\`ubuntu-24.04-arm\`)"
+            echo "Job timeout: 30 minutes"
             echo
-            echo "### QEMU/UTM VirtIO base desktop image"
-            echo
-            ls -lh "$VALIDATION_DIR"/haiku-arm64-icu74-desktop.boot.img \
-                   "$VALIDATION_DIR"/haiku-arm64-icu74-desktop.qcow2 \
-                   "$VALIDATION_DIR"/README-QEMU-VIRTIO-BASE.md \
-                   "$VALIDATION_DIR"/SHA256SUMS
-            echo
-            echo '```'
-            qemu-img info "$VALIDATION_DIR/haiku-arm64-icu74-desktop.qcow2"
-            echo '```'
-            echo
-            echo "### Full standard prototype image"
-            echo
-            echo "This image currently includes a temporary local \`release_requirements_shim\` package until the remaining ARM64 HaikuPorts providers are built/imported."
-            echo
-            ls -lh "$FULL_DIR"/haiku-arm64-icu74-full.boot.img \
-                   "$FULL_DIR"/haiku-arm64-icu74-full.qcow2 \
-                   "$FULL_DIR"/SHA256SUMS
-            echo
-            echo '```'
-            qemu-img info "$FULL_DIR/haiku-arm64-icu74-full.qcow2"
-            echo '```'
-            echo
-            echo "### UTM/iOS VirtIO minimum image"
-            echo
-            echo "This image is built from the local @minimum-mmc target and is smoke-tested with QEMU VirtIO block storage."
-            echo
-            ls -lh "$UTM_IOS_DIR"/haiku-arm64-minimum-utm-ios.qcow2 \
-                   "$UTM_IOS_DIR"/README-UTM-iOS.md \
-                   "$UTM_IOS_DIR"/SHA256SUMS
-            echo
-            echo '```'
-            qemu-img info "$UTM_IOS_DIR/haiku-arm64-minimum-utm-ios.qcow2"
-            echo '```'
-            echo
-            echo "### SHA256"
-            echo
-            echo '```'
-            cat "$VALIDATION_DIR/SHA256SUMS"
-            echo
-            cat "$FULL_DIR/SHA256SUMS"
-            echo
-            cat "$UTM_IOS_DIR/SHA256SUMS"
-            echo '```'
+            if [ -f "$VALIDATION_DIR/SHA256SUMS" ]; then
+              ls -lh "$VALIDATION_DIR"/haiku-arm64-icu74-desktop.boot.img \
+                     "$VALIDATION_DIR"/haiku-arm64-icu74-desktop.qcow2 \
+                     "$VALIDATION_DIR"/README-QEMU-VIRTIO-BASE.md \
+                     "$VALIDATION_DIR"/SHA256SUMS
+              echo
+              echo '```'
+              qemu-img info "$VALIDATION_DIR/haiku-arm64-icu74-desktop.qcow2"
+              echo
+              cat "$VALIDATION_DIR/SHA256SUMS"
+              echo '```'
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload QEMU/UTM VirtIO base desktop image artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: haiku-arm64-qemu-virtio-base-${{ steps.hrev.outputs.hrev_tag }}
+          name: haiku-arm64-qemu-virtio-base-${{ needs.derive.outputs.hrev_tag }}
           if-no-files-found: error
           retention-days: 14
           compression-level: 0
@@ -144,22 +168,98 @@ jobs:
             /workspace/tmp/haiku-build/validated/README-QEMU-VIRTIO-BASE.md
             /workspace/tmp/haiku-build/validated/SHA256SUMS
 
-      - name: Upload full standard prototype image artifacts
+      - name: Upload base validation logs
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: haiku-arm64-full-prototype-${{ steps.hrev.outputs.hrev_tag }}
-          if-no-files-found: error
+          name: haiku-arm64-qemu-virtio-base-logs-${{ needs.derive.outputs.hrev_tag }}
+          if-no-files-found: ignore
           retention-days: 14
-          compression-level: 0
           path: |
-            /workspace/tmp/haiku-build/full/haiku-arm64-icu74-full.boot.img
-            /workspace/tmp/haiku-build/full/haiku-arm64-icu74-full.qcow2
-            /workspace/tmp/haiku-build/full/SHA256SUMS
+            /workspace/tmp/haiku-boot-harness/*.validate.log
+            /workspace/tmp/haiku-boot-harness/*.serial.log
+            /workspace/tmp/haiku-build/validated/work-*/*.log
+
+  utm-ios-virtio:
+    name: UTM/iOS VirtIO minimum (${{ needs.derive.outputs.hrev_tag }})
+    needs:
+      - derive
+      - qemu-virtio-base
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - name: Check out automation repo
+        timeout-minutes: 3
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prepare workspace paths
+        timeout-minutes: 3
+        run: |
+          sudo mkdir -p /workspace/tmp
+          sudo chown -R "$USER:$USER" /workspace
+          sudo modprobe fuse || true
+          if [ -e /dev/fuse ]; then sudo chmod 666 /dev/fuse; fi
+
+      - name: Install dependencies
+        timeout-minutes: 10
+        run: make deps
+
+      - name: Clone Haiku/buildtools sources
+        timeout-minutes: 8
+        run: |
+          make clone \
+            HAIKU_REMOTE="$HAIKU_REMOTE" \
+            HAIKU_BRANCH="$HAIKU_BRANCH"
+
+      - name: Restore build cache from base job
+        timeout-minutes: 8
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            haiku/generated.arm64
+          key: ${{ needs.derive.outputs.cache_key }}
+          restore-keys: |
+            haiku-arm64-generated-${{ runner.os }}-${{ runner.arch }}-${{ needs.derive.outputs.hrev_tag }}-
+            haiku-arm64-generated-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Build and validate UTM/iOS VirtIO minimum qcow2
+        timeout-minutes: 25
+        run: |
+          make utm-ios-smoke \
+            HREV="${{ needs.derive.outputs.hrev }}" \
+            HAIKU_REMOTE="$HAIKU_REMOTE" \
+            HAIKU_BRANCH="$HAIKU_BRANCH"
+
+      - name: Summarize UTM/iOS image
+        if: always()
+        timeout-minutes: 3
+        run: |
+          UTM_IOS_DIR=/workspace/tmp/haiku-build/utm-ios
+          {
+            echo "## UTM/iOS VirtIO minimum image"
+            echo
+            echo "Revision: \`${{ needs.derive.outputs.hrev_tag }}\`"
+            echo "Job timeout: 30 minutes"
+            echo
+            if [ -f "$UTM_IOS_DIR/SHA256SUMS" ]; then
+              ls -lh "$UTM_IOS_DIR"/haiku-arm64-minimum-utm-ios.qcow2 \
+                     "$UTM_IOS_DIR"/README-UTM-iOS.md \
+                     "$UTM_IOS_DIR"/SHA256SUMS
+              echo
+              echo '```'
+              qemu-img info "$UTM_IOS_DIR/haiku-arm64-minimum-utm-ios.qcow2"
+              echo
+              cat "$UTM_IOS_DIR/SHA256SUMS"
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload UTM/iOS VirtIO minimum image artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: haiku-arm64-utm-ios-virtio-${{ steps.hrev.outputs.hrev_tag }}
+          name: haiku-arm64-utm-ios-virtio-${{ needs.derive.outputs.hrev_tag }}
           if-no-files-found: error
           retention-days: 14
           compression-level: 0
@@ -169,16 +269,89 @@ jobs:
             /workspace/tmp/haiku-build/utm-ios/SHA256SUMS
             /workspace/tmp/haiku-build/utm-ios/qemu-minimum-qcow-virtio-smoke.log
 
-      - name: Upload validation logs
+      - name: Upload UTM/iOS logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: haiku-arm64-image-logs-${{ steps.hrev.outputs.hrev_tag }}
+          name: haiku-arm64-utm-ios-virtio-logs-${{ needs.derive.outputs.hrev_tag }}
+          if-no-files-found: ignore
+          retention-days: 14
+          path: |
+            /workspace/tmp/haiku-build/utm-ios/*.log
+
+  full-standard-prototype:
+    name: Full standard prototype (${{ needs.derive.outputs.hrev_tag }})
+    if: github.event_name == 'workflow_dispatch' && inputs.build_full_prototype
+    needs:
+      - derive
+      - qemu-virtio-base
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - name: Check out automation repo
+        timeout-minutes: 3
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prepare workspace paths
+        timeout-minutes: 3
+        run: |
+          sudo mkdir -p /workspace/tmp
+          sudo chown -R "$USER:$USER" /workspace
+          sudo modprobe fuse || true
+          if [ -e /dev/fuse ]; then sudo chmod 666 /dev/fuse; fi
+
+      - name: Install dependencies
+        timeout-minutes: 10
+        run: make deps
+
+      - name: Clone Haiku/buildtools sources
+        timeout-minutes: 8
+        run: |
+          make clone \
+            HAIKU_REMOTE="$HAIKU_REMOTE" \
+            HAIKU_BRANCH="$HAIKU_BRANCH"
+
+      - name: Restore build and nightly cache
+        timeout-minutes: 8
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            haiku/generated.arm64
+            /workspace/tmp/haiku-nightly-arm64
+          key: ${{ needs.derive.outputs.cache_key }}
+          restore-keys: |
+            haiku-arm64-generated-${{ runner.os }}-${{ runner.arch }}-${{ needs.derive.outputs.hrev_tag }}-
+            haiku-arm64-generated-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Build and validate optional full standard prototype
+        timeout-minutes: 25
+        run: |
+          make full-standard-artifacts \
+            HREV="${{ needs.derive.outputs.hrev }}" \
+            HAIKU_REMOTE="$HAIKU_REMOTE" \
+            HAIKU_BRANCH="$HAIKU_BRANCH"
+
+      - name: Upload full standard prototype image artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: haiku-arm64-full-prototype-${{ needs.derive.outputs.hrev_tag }}
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+          path: |
+            /workspace/tmp/haiku-build/full/haiku-arm64-icu74-full.boot.img
+            /workspace/tmp/haiku-build/full/haiku-arm64-icu74-full.qcow2
+            /workspace/tmp/haiku-build/full/SHA256SUMS
+
+      - name: Upload full prototype logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: haiku-arm64-full-prototype-logs-${{ needs.derive.outputs.hrev_tag }}
           if-no-files-found: ignore
           retention-days: 14
           path: |
             /workspace/tmp/haiku-boot-harness/*.validate.log
-            /workspace/tmp/haiku-boot-harness/*.serial.log
-            /workspace/tmp/haiku-build/validated/work-*/*.log
             /workspace/tmp/haiku-build/full/work-*/*.log
-            /workspace/tmp/haiku-build/utm-ios/*.log

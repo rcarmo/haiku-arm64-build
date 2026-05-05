@@ -99,7 +99,7 @@ make orangepi6plus-efi-snapshot
 
 ## Authoritative scripts
 
-- `.github/workflows/validation-image.yml` — tag-only (`hrev*`) GitHub Actions build for core and full-prototype raw+qcow2 artifacts on ARM64 runners
+- `.github/workflows/validation-image.yml` — `hrev*` tag/manual GitHub Actions build for QEMU/UTM VirtIO base and UTM/iOS VirtIO artifacts on ARM64 runners; every job is capped at 30 minutes and the full prototype is manual-only
 - `make bfs-fuse` / Haiku `src/tools/bfs_shell` — host BFS FUSE helper bootstrap
 - `scripts/fetch-latest-arm64-nightly.sh`
 - `scripts/build-validated-desktop-image.sh`
@@ -125,10 +125,13 @@ As of 2026-04-30:
   and smoke-tests it with QEMU `virt` using VirtIO block storage; for UTM/iOS
   attach the qcow2 as a VirtIO disk. The minimum image includes `virtio_block`
   so the kernel can rediscover and mount the boot partition after loader handoff
-- GitHub Actions (`.github/workflows/validation-image.yml`) uploads:
+- GitHub Actions (`.github/workflows/validation-image.yml`) uses <=30m jobs and uploads:
   - `haiku-arm64-qemu-virtio-base-hrevNNNNN`: upstream-matching minimal desktop
     base image, validated with VirtIO block storage
+  - `haiku-arm64-qemu-virtio-base-logs-hrevNNNNN`: base validation logs
   - `haiku-arm64-utm-ios-virtio-hrevNNNNN`: minimum UTM/iOS VirtIO qcow2
+  - `haiku-arm64-utm-ios-virtio-logs-hrevNNNNN`: UTM/iOS smoke logs
+  - `haiku-arm64-full-prototype-hrevNNNNN`: optional manual full prototype
 - stock ARM64 nightly validates in QEMU
 - the direct-package desktop lane validates in QEMU
 - the local arm64 `HAIKU_NO_DOWNLOADS=1` `@minimum-mmc` path builds and passes

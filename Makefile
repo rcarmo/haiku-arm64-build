@@ -13,7 +13,9 @@ IMAGE         := $(BUILD_DIR)/haiku-mmc.image
 HREV          ?=
 NIGHTLY_DIR   := /workspace/tmp/haiku-nightly-arm64
 NIGHTLY_BASE_IMAGE := $(NIGHTLY_DIR)/haiku-master-arm64-current-mmc.image
-NIGHTLY_SYNC_ARGS := $(if $(HREV),--hrev $(HREV),)
+NORMALIZED_HREV := $(patsubst hrev%,%,$(HREV))
+NIGHTLY_SYNC_ARGS := $(if $(NORMALIZED_HREV),--hrev $(NORMALIZED_HREV),)
+HAIKU_REVISION_ENV := $(if $(NORMALIZED_HREV),HAIKU_REVISION=hrev$(NORMALIZED_HREV),)
 DESKTOP_BUILD_IMAGE := /workspace/tmp/haiku-build/validated/haiku-arm64-icu74-desktop.boot.img
 DESKTOP_RUN_IMAGE := $(DESKTOP_BUILD_IMAGE)
 DESKTOP_VALIDATE_IMAGE := $(DESKTOP_BUILD_IMAGE)
@@ -157,24 +159,24 @@ toolchain: jam
 	fi
 
 bfs-fuse: toolchain
-	cd $(BUILD_DIR) && jam -j$(NPROC) -q '<build>bfs_fuse'
+	cd $(BUILD_DIR) && $(HAIKU_REVISION_ENV) jam -j$(NPROC) -q '<build>bfs_fuse'
 	@mkdir -p "$$(dirname "$(BFS_FUSE)")"
 	ln -sf "$(BFS_FUSE_BUILT)" "$(BFS_FUSE)"
 	@test -x "$(BFS_FUSE)"
 	@echo "✅ BFS FUSE helper linked: $(BFS_FUSE) -> $(BFS_FUSE_BUILT)"
 
 direct-package: toolchain
-	cd $(BUILD_DIR) && jam -j$(NPROC) -q haiku.hpkg
+	cd $(BUILD_DIR) && $(HAIKU_REVISION_ENV) jam -j$(NPROC) -q haiku.hpkg
 	@test -f "$(BUILD_DIR)/objects/haiku/arm64/packaging/packages/haiku.hpkg"
 	@echo "✅ Direct haiku package built: $(BUILD_DIR)/objects/haiku/arm64/packaging/packages/haiku.hpkg"
 
 image: toolchain
-	cd $(BUILD_DIR) && jam -j$(NPROC) -q @minimum-mmc
+	cd $(BUILD_DIR) && $(HAIKU_REVISION_ENV) jam -j$(NPROC) -q @minimum-mmc
 	@echo "✅ Image built: $(IMAGE)"
 	@ls -lh $(IMAGE)
 
 raw: toolchain
-	cd $(BUILD_DIR) && jam -j$(NPROC) -q @minimum-raw esp.image haiku-minimum.image
+	cd $(BUILD_DIR) && $(HAIKU_REVISION_ENV) jam -j$(NPROC) -q @minimum-raw esp.image haiku-minimum.image
 	@echo "✅ Raw images built"
 	@ls -lh $(BUILD_DIR)/esp.image $(BUILD_DIR)/haiku-minimum.image
 
@@ -208,7 +210,7 @@ distclean:
 	rm -rf $(HAIKU_DIR) $(BUILDTOOLS_DIR) $(BUILD_DIR)
 
 bootstrap: toolchain
-	cd $(BUILD_DIR) && jam -j$(NPROC) -q @bootstrap-mmc
+	cd $(BUILD_DIR) && $(HAIKU_REVISION_ENV) jam -j$(NPROC) -q @bootstrap-mmc
 	@echo "✅ Bootstrap image built"
 	@ls -lh $(BUILD_DIR)/haiku-mmc.image
 
