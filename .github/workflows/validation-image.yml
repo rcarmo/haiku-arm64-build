@@ -60,7 +60,7 @@ jobs:
     steps:
       - name: Check out automation repo
         timeout-minutes: 3
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -86,7 +86,7 @@ jobs:
       - name: Restore build and nightly cache
         id: build-cache
         timeout-minutes: 5
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: |
             haiku/generated.arm64
@@ -122,7 +122,7 @@ jobs:
       - name: Save build and nightly cache
         if: steps.build-cache.outputs.cache-hit != 'true'
         timeout-minutes: 8
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: |
             haiku/generated.arm64
@@ -156,7 +156,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload QEMU/UTM VirtIO base desktop image artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: haiku-arm64-qemu-virtio-base-${{ needs.derive.outputs.hrev_tag }}
           if-no-files-found: error
@@ -170,7 +170,7 @@ jobs:
 
       - name: Upload base validation logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: haiku-arm64-qemu-virtio-base-logs-${{ needs.derive.outputs.hrev_tag }}
           if-no-files-found: ignore
@@ -190,7 +190,7 @@ jobs:
     steps:
       - name: Check out automation repo
         timeout-minutes: 3
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -215,7 +215,7 @@ jobs:
 
       - name: Restore build cache from base job
         timeout-minutes: 8
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: |
             haiku/generated.arm64
@@ -257,7 +257,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload UTM/iOS VirtIO minimum image artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: haiku-arm64-utm-ios-virtio-${{ needs.derive.outputs.hrev_tag }}
           if-no-files-found: error
@@ -271,7 +271,7 @@ jobs:
 
       - name: Upload UTM/iOS logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: haiku-arm64-utm-ios-virtio-logs-${{ needs.derive.outputs.hrev_tag }}
           if-no-files-found: ignore
@@ -290,7 +290,7 @@ jobs:
     steps:
       - name: Check out automation repo
         timeout-minutes: 3
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -315,7 +315,7 @@ jobs:
 
       - name: Restore build and nightly cache
         timeout-minutes: 8
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: |
             haiku/generated.arm64
@@ -334,7 +334,7 @@ jobs:
             HAIKU_BRANCH="$HAIKU_BRANCH"
 
       - name: Upload full standard prototype image artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: haiku-arm64-full-prototype-${{ needs.derive.outputs.hrev_tag }}
           if-no-files-found: error
@@ -347,7 +347,7 @@ jobs:
 
       - name: Upload full prototype logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: haiku-arm64-full-prototype-logs-${{ needs.derive.outputs.hrev_tag }}
           if-no-files-found: ignore

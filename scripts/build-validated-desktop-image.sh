@@ -104,8 +104,6 @@ require_file "$BASE_IMAGE"
 require_file "$DIRECT_HAIKU_HPKG"
 require_file "$DIRECT_HAIKU_PACKAGE_INFO"
 [[ -d "$DIRECT_HAIKU_CONTENTS_DIR" ]] || { echo "missing dir: $DIRECT_HAIKU_CONTENTS_DIR" >&2; exit 1; }
-require_file "$BASH_HPKG"
-require_file "$COREUTILS_HPKG"
 
 case "$IMAGE_FLAVOR" in
   validation|full) ;;
@@ -425,6 +423,11 @@ PY
     echo "== detected modern bootstrap base package set =="
   else
     echo "== detected legacy base package set =="
+    require_file "$BASH_HPKG"
+    require_file "$COREUTILS_HPKG"
+    echo "== sanitizing/creating legacy compatibility packages =="
+    sanitize_bash_package_if_needed
+    create_compat_package
   fi
 
   find "$pkgdir" -maxdepth 1 -type f \
@@ -481,9 +484,6 @@ else
   echo "== using provided zstd package: $ZSTD_HPKG =="
 fi
 
-echo "== building compat runtime package =="
-create_compat_package
-
 if [[ "$IMAGE_FLAVOR" == "full" ]]; then
   echo "== building full-image release requirements shim package =="
   create_release_requirements_shim_package
@@ -497,9 +497,12 @@ assemble_image
 
 echo
 if [[ "$IMAGE_FLAVOR" == "full" ]]; then
-  ls -lh "$ZSTD_HPKG" "$OUTPUT_COMPAT_HPKG" "$OUTPUT_RELEASE_SHIM_HPKG" "$OUTPUT_HAIKU_HPKG" "$OUTPUT_IMAGE"
+  ls -lh "$ZSTD_HPKG" "$OUTPUT_RELEASE_SHIM_HPKG" "$OUTPUT_HAIKU_HPKG" "$OUTPUT_IMAGE"
 else
-  ls -lh "$ZSTD_HPKG" "$OUTPUT_COMPAT_HPKG" "$OUTPUT_HAIKU_HPKG" "$OUTPUT_IMAGE"
+  ls -lh "$ZSTD_HPKG" "$OUTPUT_HAIKU_HPKG" "$OUTPUT_IMAGE"
+fi
+if [[ -f "$OUTPUT_COMPAT_HPKG" ]]; then
+  ls -lh "$OUTPUT_COMPAT_HPKG"
 fi
 echo
 echo "validated zstd package: $ZSTD_HPKG"
