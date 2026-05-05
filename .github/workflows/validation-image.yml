@@ -187,8 +187,8 @@ jobs:
           path: /workspace/tmp/haiku-build/validated
 
       - name: Validate base image with VirtIO block
-        timeout-minutes: 20
-        run: make desktop-validate HREV="${{ needs.derive.outputs.hrev }}"
+        timeout-minutes: 15
+        run: make desktop-validate HREV="${{ needs.derive.outputs.hrev }}" DESKTOP_VALIDATE_TIMEOUT_SECS=600
 
       - name: Convert base image to qcow2 and checksum
         timeout-minutes: 8

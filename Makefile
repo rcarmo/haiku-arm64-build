@@ -1,6 +1,8 @@
 # Haiku ARM64 Build — Reproducible Makefile
 # Host: Orange Pi 6 Plus (aarch64 Debian Trixie)
 
+SHELL := /bin/bash
+
 HAIKU_DIR     := $(CURDIR)/haiku
 BUILD_DIR     := $(HAIKU_DIR)/generated.arm64
 BUILDTOOLS_DIR := $(CURDIR)/buildtools

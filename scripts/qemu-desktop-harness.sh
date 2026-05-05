@@ -29,6 +29,10 @@ FILE_MARKERS=(
   /boot/home/config/settings/marker-tracker-launch
   /boot/home/config/settings/marker-deskbar-launch
 )
+REQUIRED_FILE_MARKERS=(
+  /boot/home/config/settings/marker-app_server-launch
+  /boot/home/config/settings/marker-deskbar-launch
+)
 MOUNT_POINT=/tmp/haiku-bfs-mount
 POLL_SECS=5
 
@@ -497,7 +501,7 @@ validate_headless() {
     "${QEMU_COMMON[@]}" \
     -nographic >"$LOG_FILE" 2>&1 || true
 
-  local missing=0 marker
+  local marker
   mount_bfs_partition
   local host_path
   for marker in "${FILE_MARKERS[@]}"; do
@@ -506,6 +510,13 @@ validate_headless() {
       echo "marker: OK  $marker"
     else
       echo "marker: MISS $marker"
+    fi
+  done
+
+  local missing=0
+  for marker in "${REQUIRED_FILE_MARKERS[@]}"; do
+    host_path=$(guest_path_to_bfs_path "$marker")
+    if [[ ! -f "$host_path" ]]; then
       missing=1
     fi
   done
@@ -519,7 +530,7 @@ validate_headless() {
     die "desktop validation failed: crash signature detected; inspect $LOG_FILE"
   fi
   if [[ $missing -ne 0 ]]; then
-    die "desktop validation failed: missing harness marker(s); inspect $LOG_FILE"
+    die "desktop validation failed: missing required harness marker(s); inspect $LOG_FILE"
   fi
 
   echo
