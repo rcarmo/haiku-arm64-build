@@ -17,7 +17,8 @@ on:
         type: boolean
 
 permissions:
-  contents: read
+  contents: write
+  actions: write
 
 env:
   HAIKU_REMOTE: https://github.com/rcarmo/haiku.git
@@ -427,3 +428,29 @@ jobs:
           path: |
             /workspace/tmp/haiku-boot-harness/*.validate.log
             /workspace/tmp/haiku-build/full/work-*/*.log
+
+  publish-release:
+    name: Publish release and retain latest five
+    needs:
+      - derive
+      - qemu-virtio-base-validate
+      - utm-ios-virtio
+    if: success()
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - name: Check out automation repo
+        timeout-minutes: 3
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Publish GitHub release assets and clean old generations
+        timeout-minutes: 30
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HREV_TAG: ${{ needs.derive.outputs.hrev_tag }}
+          RUN_ID: ${{ github.run_id }}
+          TARGET_SHA: ${{ github.sha }}
+          KEEP_RELEASES: 5
+        run: scripts/publish-github-release.sh
