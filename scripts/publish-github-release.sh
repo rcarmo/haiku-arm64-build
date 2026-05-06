@@ -177,16 +177,16 @@ upload_asset() {
 cleanup_old_release_generations() {
   echo "Cleaning artifacts/runs older than the latest $KEEP_RELEASES releases"
   api GET "/releases?per_page=100" > "$WORK_DIR/releases.json"
-  mapfile -t keep_tags < <(jq -r --argjson keep "$KEEP_RELEASES" 'sort_by(.created_at) | reverse | .[:$keep] | .[].tag_name' "$WORK_DIR/releases.json")
+  mapfile -t keep_tags < <(jq -r --argjson keep "$KEEP_RELEASES" 'sort_by(.published_at // .created_at) | reverse | .[:$keep] | .[].tag_name' "$WORK_DIR/releases.json")
   local cutoff
   # Use the oldest retained release as the cutoff. If there are fewer than
   # KEEP_RELEASES releases, use the oldest available retained release (usually
   # the release just created) so pre-release CI artifacts/runs are still pruned.
-  cutoff=$(jq -r --argjson keep "$KEEP_RELEASES" 'sort_by(.created_at) | reverse | (.[($keep - 1)].created_at // .[-1].created_at // empty)' "$WORK_DIR/releases.json")
+  cutoff=$(jq -r --argjson keep "$KEEP_RELEASES" 'sort_by(.published_at // .created_at) | reverse | (.[($keep - 1)].published_at // .[$keep - 1].created_at // .[-1].published_at // .[-1].created_at // empty)' "$WORK_DIR/releases.json")
   printf '%s\n' "Keeping release tags:" "${keep_tags[@]}"
 
   # Delete releases beyond the retention window. Keep tags intact.
-  jq -r --argjson keep "$KEEP_RELEASES" 'sort_by(.created_at) | reverse | .[$keep:][]? | [.id,.tag_name] | @tsv' "$WORK_DIR/releases.json" \
+  jq -r --argjson keep "$KEEP_RELEASES" 'sort_by(.published_at // .created_at) | reverse | .[$keep:][]? | [.id,.tag_name] | @tsv' "$WORK_DIR/releases.json" \
     | while IFS=$'\t' read -r release_id tag; do
         [[ -n "$release_id" ]] || continue
         echo "Deleting old release $tag ($release_id)"
