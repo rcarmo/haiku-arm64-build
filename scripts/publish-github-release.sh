@@ -179,7 +179,10 @@ cleanup_old_release_generations() {
   api GET "/releases?per_page=100" > "$WORK_DIR/releases.json"
   mapfile -t keep_tags < <(jq -r --argjson keep "$KEEP_RELEASES" 'sort_by(.created_at) | reverse | .[:$keep] | .[].tag_name' "$WORK_DIR/releases.json")
   local cutoff
-  cutoff=$(jq -r --argjson keep "$KEEP_RELEASES" 'sort_by(.created_at) | reverse | .[$keep - 1].created_at // empty' "$WORK_DIR/releases.json")
+  # Use the oldest retained release as the cutoff. If there are fewer than
+  # KEEP_RELEASES releases, use the oldest available retained release (usually
+  # the release just created) so pre-release CI artifacts/runs are still pruned.
+  cutoff=$(jq -r --argjson keep "$KEEP_RELEASES" 'sort_by(.created_at) | reverse | (.[($keep - 1)].created_at // .[-1].created_at // empty)' "$WORK_DIR/releases.json")
   printf '%s\n' "Keeping release tags:" "${keep_tags[@]}"
 
   # Delete releases beyond the retention window. Keep tags intact.
@@ -190,21 +193,15 @@ cleanup_old_release_generations() {
         api DELETE "/releases/$release_id" >/dev/null
       done
 
-  # Delete Actions artifacts whose names mention an hrev tag outside the retained set.
+  # Delete Actions artifacts older than the retained release window. Release
+  # assets are now the durable distribution surface; Actions artifacts are only
+  # handoff/staging data.
   api GET "/actions/artifacts?per_page=100" > "$WORK_DIR/actions-artifacts.json"
-  jq -r '.artifacts[] | [.id,.name] | @tsv' "$WORK_DIR/actions-artifacts.json" \
-    | while IFS=$'\t' read -r artifact_id artifact_name; do
+  jq -r --arg cutoff "$cutoff" '.artifacts[] | select($cutoff == "" or .created_at < $cutoff) | [.id,.name,.created_at] | @tsv' "$WORK_DIR/actions-artifacts.json" \
+    | while IFS=$'\t' read -r artifact_id artifact_name created_at; do
         [[ -n "$artifact_id" ]] || continue
-        if [[ "$artifact_name" =~ hrev[0-9]+ ]]; then
-          local tag="${BASH_REMATCH[0]}" keep=0
-          for kept in "${keep_tags[@]}"; do
-            [[ "$tag" == "$kept" ]] && keep=1
-          done
-          if [[ "$keep" == 0 ]]; then
-            echo "Deleting old Actions artifact $artifact_name ($artifact_id)"
-            api DELETE "/actions/artifacts/$artifact_id" >/dev/null
-          fi
-        fi
+        echo "Deleting old Actions artifact $artifact_name ($artifact_id, $created_at)"
+        api DELETE "/actions/artifacts/$artifact_id" >/dev/null
       done
 
   # Delete completed workflow runs older than the oldest retained release.
