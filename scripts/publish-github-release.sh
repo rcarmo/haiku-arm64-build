@@ -104,6 +104,10 @@ download_run_artifact() {
     echo "missing run artifact: $artifact_name" >&2
     return 1
   fi
+  if [[ -s "$WORK_DIR/$asset_name" ]]; then
+    echo "Using existing $WORK_DIR/$asset_name"
+    return 0
+  fi
   echo "Downloading $artifact_name -> $asset_name"
   curl --retry 5 --retry-delay 2 -fsSL -H "Authorization: Bearer $TOKEN" -L "$url" -o "$WORK_DIR/$asset_name"
 }
